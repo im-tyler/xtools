@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "X Tools",
+  "name": "Tools",
   "version": "1.0.0",
   "description": "Screenshot and distraction-free tools for X/Twitter.",
   "permissions": ["activeTab", "tabs", "downloads", "scripting", "storage"],
