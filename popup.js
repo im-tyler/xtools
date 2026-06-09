@@ -204,6 +204,69 @@ document.getElementById("btn-grok-scan").addEventListener("click", function () {
       var title = document.title.replace(/\s*[\/|]\s*(X|Grok).*$/i, '').trim() || 'Grok Chat';
       var msgs = [];
 
+      // Strategy 0 (primary): bubble-segmented transcript.
+      // Grok renders each answer as a flat list of markdown blocks (no testids) and wraps
+      // each user message in an opaque "bubble" background. Container children don't map 1:1
+      // to turns (an answer + the next question can share one child), so we locate the turn
+      // container, find the user bubbles, then walk in document order: text outside a bubble
+      // is Grok, text inside a bubble is the user.
+      (function () {
+        var root = document.querySelector('[data-testid="primaryColumn"]') || document.querySelector('main') || document.body;
+        function gtxt(el) { return (el.innerText || el.textContent || '').trim(); }
+        function bgOf(el) { return getComputedStyle(el).backgroundColor; }
+        function opaque(c) {
+          if (!c || c === 'transparent' || c === 'rgba(0, 0, 0, 0)') return false;
+          var m = c.match(/rgba?\(([^)]+)\)/); if (!m) return true;
+          var p = m[1].split(','); return p.length >= 4 ? parseFloat(p[3]) >= 0.9 : true;
+        }
+        var baseBg = bgOf(document.body);
+        if (!opaque(baseBg)) baseBg = bgOf(document.documentElement);
+        function isBubble(el) { return opaque(bgOf(el)) && bgOf(el) !== baseBg && gtxt(el).length > 0; }
+
+        // Largest "solid" block = one message (text not dominated by a single child).
+        var M = null, Mlen = 0;
+        root.querySelectorAll('div,section,article').forEach(function (el) {
+          var t = gtxt(el).length; if (t < 80 || t <= Mlen) return;
+          var mc = 0;
+          for (var i = 0; i < el.children.length; i++) { var ct = gtxt(el.children[i]).length; if (ct > mc) mc = ct; }
+          if (mc <= t * 0.55) { Mlen = t; M = el; }
+        });
+        if (!M) return;
+
+        // Turn container = lowest ancestor of M with >=2 text-bearing children.
+        var C = null, n = M.parentElement;
+        while (n && n !== root.parentElement) {
+          var big = 0;
+          for (var i = 0; i < n.children.length; i++) { if (gtxt(n.children[i]).length > 10) big++; }
+          if (big >= 2) { C = n; break; }
+          if (n === root) break;
+          n = n.parentElement;
+        }
+        if (!C) C = M.parentElement || M;
+
+        // Outermost user-bubble elements (don't descend once a bubble is found).
+        var bubbles = [];
+        (function find(el) {
+          if (el !== C && isBubble(el)) { bubbles.push(el); return; }
+          for (var i = 0; i < el.children.length; i++) find(el.children[i]);
+        })(C);
+        function inBubble(c) { for (var i = 0; i < bubbles.length; i++) if (bubbles[i] === c) return true; return false; }
+        function hasBubble(el) { for (var i = 0; i < bubbles.length; i++) if (el.contains(bubbles[i])) return true; return false; }
+
+        var buf = [];
+        function flush() { var t = buf.join('\n').replace(/\n{3,}/g, '\n\n').trim(); if (t) msgs.push({ role: 'Grok', content: t }); buf = []; }
+        (function walk(el) {
+          for (var i = 0; i < el.children.length; i++) {
+            var c = el.children[i];
+            if (inBubble(c)) { flush(); var u = gtxt(c); if (u) msgs.push({ role: 'user', content: u }); }
+            else if (hasBubble(c)) walk(c);
+            else { var t = gtxt(c); if (t) buf.push(t); }
+          }
+        })(C);
+        flush();
+      })();
+      if (msgs.length) return { title: title, messages: msgs };
+
       // Strategy 1: data-testid (Twitter may add these in future updates)
       function testIdPairs(hSel, gSel) {
         var hEls = document.querySelectorAll(hSel), gEls = document.querySelectorAll(gSel);
