@@ -360,9 +360,13 @@ document.getElementById("btn-grok-debug").addEventListener("click", function () 
     target: { tabId: currentTabId },
     func: function () {
       function txt(el) { return (el.innerText || el.textContent || "").trim(); }
-      function bgOf(el) {
-        var c = getComputedStyle(el).backgroundColor;
-        return (c && c !== "rgba(0, 0, 0, 0)" && c !== "transparent") ? c : "";
+      function deepBg(el) {
+        var els = [el].concat(Array.prototype.slice.call(el.querySelectorAll("*")));
+        for (var i = 0; i < els.length && i < 80; i++) {
+          var c = getComputedStyle(els[i]).backgroundColor;
+          if (c && c !== "rgba(0, 0, 0, 0)" && c !== "transparent") return c;
+        }
+        return "";
       }
       var root = document.querySelector('[data-testid="primaryColumn"]')
         || document.querySelector("main") || document.body;
@@ -370,43 +374,53 @@ document.getElementById("btn-grok-debug").addEventListener("click", function () 
       lines.push("URL: " + location.href);
       lines.push("root: " + (root.getAttribute("data-testid") || root.tagName));
       lines.push("");
-      lines.push("=== PRIMARY COLUMN SKELETON ===");
-      lines.push("(leaf = bottoms out in text; branch = >=2 text children = turn split)");
-      lines.push("");
 
-      var count = 0;
-      function textKids(el) {
-        var out = [];
+      // M = largest "solid" text block (one message, not dominated by a single child).
+      var M = null, Mlen = 0;
+      root.querySelectorAll("div,section,article").forEach(function (el) {
+        var t = txt(el).length;
+        if (t < 80 || t <= Mlen) return;
+        var maxChild = 0;
         for (var i = 0; i < el.children.length; i++) {
-          if (txt(el.children[i]).length > 15) out.push(el.children[i]);
+          var ct = txt(el.children[i]).length;
+          if (ct > maxChild) maxChild = ct;
         }
-        return out;
-      }
-      function walk(el, depth) {
-        if (count > 350 || depth > 18) return;
-        var t = txt(el);
-        if (t.length < 5) return;
-        var tk = textKids(el);
-        var isLeaf = tk.length === 0;
-        var isBranch = tk.length >= 2;
-        if (isLeaf || isBranch) {
-          count++;
-          var r = el.getBoundingClientRect();
-          var pad = new Array(depth + 1).join("  ");
-          lines.push(pad + (isBranch ? "[BRANCH " + tk.length + "] " : "[leaf] ")
-            + "<" + el.tagName.toLowerCase() + ">"
-            + " tid=" + (el.getAttribute("data-testid") || "-")
-            + " kids=" + el.children.length
+        if (maxChild <= t * 0.55) { Mlen = t; M = el; }
+      });
+
+      if (!M) {
+        lines.push("NO MESSAGE BLOCK FOUND");
+      } else {
+        // C = lowest ancestor of M with >=2 children carrying real text = the turn container.
+        var C = null, n = M.parentElement;
+        while (n && n !== root.parentElement) {
+          var big = 0;
+          for (var i = 0; i < n.children.length; i++) {
+            if (txt(n.children[i]).length > 10) big++;
+          }
+          if (big >= 2) { C = n; break; }
+          if (n === root) break;
+          n = n.parentElement;
+        }
+        if (!C) C = M.parentElement || M;
+        var cr = C.getBoundingClientRect();
+        lines.push("CONTAINER <" + C.tagName.toLowerCase() + "> children=" + C.childElementCount
+          + " tlen=" + txt(C).length + " L=" + Math.round(cr.left) + " W=" + Math.round(cr.width));
+        lines.push("message block M tlen=" + Mlen);
+        lines.push("");
+        lines.push("=== DIRECT CHILDREN OF CONTAINER (turns) ===");
+        Array.prototype.slice.call(C.children).forEach(function (ch, i) {
+          var t = txt(ch), r = ch.getBoundingClientRect();
+          lines.push("--- child[" + i + "] <" + ch.tagName.toLowerCase() + ">"
+            + " kids=" + ch.childElementCount
             + " tlen=" + t.length
             + " L=" + Math.round(r.left) + " W=" + Math.round(r.width)
-            + " align=" + getComputedStyle(el).textAlign
-            + (bgOf(el) ? " BG=" + bgOf(el) : ""));
-          if (isLeaf) lines.push(pad + '  "' + t.slice(0, 80).replace(/\s+/g, " ") + '"');
-        }
-        var kids = el.children;
-        for (var i = 0; i < kids.length; i++) walk(kids[i], depth + (isBranch ? 1 : 0));
+            + " align=" + getComputedStyle(ch).textAlign
+            + (deepBg(ch) ? " BG=" + deepBg(ch) : ""));
+          lines.push('  START: "' + t.slice(0, 80).replace(/\s+/g, " ") + '"');
+          if (t.length > 80) lines.push('  END:   "' + t.slice(-80).replace(/\s+/g, " ") + '"');
+        });
       }
-      walk(root, 0);
 
       var out = lines.join("\n");
       var blob = new Blob([out], { type: "text/plain" });
