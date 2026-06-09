@@ -30,15 +30,30 @@
     hideBookmarksNav: true,
   };
 
+  function isTimelineLayout() {
+    var primary = document.querySelector('[data-testid="primaryColumn"]');
+    if (!primary) return true;
+    return primary.getBoundingClientRect().width <= 700;
+  }
+
   var rules = {
     followingDefault: function () { return ""; },
     hideForYou: function () { return '[role="tablist"] [role="tab"]:first-child { display: none !important; }'; },
     hideSuggested: function () { return '[data-testid="whoToFollowSspAd"] { display: none !important; }'; },
     hideDiscoverMore: function () { return ""; },
     hideInlinePrompts: function () { return ""; },
-    hideSidebar: function () { return '[data-testid="sidebarColumn"] { display: none !important; }'; },
-    centerContent: function () { return '[data-testid="sidebarColumn"] { display: none !important; } [data-testid="primaryColumn"] { transform: translateX(var(--aie-tx, 0px)) !important; }'; },
-    keepSidebarLeft: function () { return '@media (min-width: 900px) { header[role="banner"] { position: fixed !important; left: var(--aie-nav-left, 0px) !important; top: 0 !important; bottom: 0 !important; height: 100vh !important; transform: none !important; z-index: 10 !important; } header[role="banner"] > div { height: 100vh !important; } }'; },
+    hideSidebar: function () {
+      if (!isTimelineLayout()) return '';
+      return '[data-testid="sidebarColumn"] { display: none !important; }';
+    },
+    centerContent: function () {
+      if (!isTimelineLayout()) return '';
+      return '[data-testid="sidebarColumn"] { display: none !important; } [data-testid="primaryColumn"] { transform: translateX(var(--aie-tx, 0px)) !important; }';
+    },
+    keepSidebarLeft: function () {
+      if (!isTimelineLayout()) return '';
+      return '@media (min-width: 900px) { header[role="banner"] { position: fixed !important; left: var(--aie-nav-left, 0px) !important; top: 0 !important; bottom: 0 !important; height: 100vh !important; transform: none !important; z-index: 10 !important; } header[role="banner"] > div { height: 100vh !important; } }';
+    },
     hideTrending: function () { return '[data-testid="sidebarColumn"] [data-testid="trend"] { display: none !important; }'; },
     hideWhoToFollow: function () { return '[aria-label="Who to follow"], [data-testid="WhoToFollow"], [data-testid="sidebarColumn"] [data-testid="UserCell"] { display: none !important; }'; },
     hideViews: function () { return '[data-testid="views"] { display: none !important; }'; },
@@ -57,6 +72,12 @@
     hideGrokFab: function () { return '[data-testid="GrokDrawer"], button[aria-label="Grok"][data-testid="GrokDrawerHeader"] { display: none !important; }'; },
   };
 
+  var _cssTimer = null;
+  function scheduleCSSRefresh() {
+    clearTimeout(_cssTimer);
+    _cssTimer = setTimeout(function () { applyCSS(currentSettings); }, 300);
+  }
+
   function buildCSS(settings) {
     if (settings.enabled === false) return "";
     var css = "";
@@ -68,7 +89,12 @@
     return css;
   }
 
+  var _lastTx = '0px';
+  var _lastNavLeft = '0px';
+
   function applyCSS(settings) {
+    document.documentElement.style.setProperty('--aie-tx', _lastTx);
+    document.documentElement.style.setProperty('--aie-nav-left', _lastNavLeft);
     if (styleEl) styleEl.remove();
     styleEl = null;
     var css = buildCSS(settings);
@@ -149,24 +175,24 @@
     var primary = document.querySelector('[data-testid="primaryColumn"]');
     var header = document.querySelector('header[role="banner"]');
 
-    // Always zero first so stale offsets don't persist on layout changes
-    document.documentElement.style.setProperty('--aie-tx', '0px');
-    document.documentElement.style.setProperty('--aie-nav-left', '0px');
-
     if (!primary) return;
 
     var colRect = primary.getBoundingClientRect();
     var viewW   = window.innerWidth;
     var colW    = colRect.width;
 
-    // Only center the standard single-column feed (~600px).
-    // Grok and DMs use multi-panel layouts with a wider or different-sized
-    // primaryColumn — centering there shifts only some elements and causes overflow.
-    if (colW < 400 || colW > 750) return;
+    if (colW < 400 || colW > 750) {
+      document.documentElement.style.setProperty('--aie-tx', '0px');
+      document.documentElement.style.setProperty('--aie-nav-left', '0px');
+      _lastTx = '0px';
+      _lastNavLeft = '0px';
+      return;
+    }
 
     var delta = Math.round((viewW - colW) / 2 - colRect.left);
     if (currentSettings.centerContent && delta > 0) {
-      document.documentElement.style.setProperty('--aie-tx', delta + 'px');
+      _lastTx = delta + 'px';
+      document.documentElement.style.setProperty('--aie-tx', _lastTx);
     }
 
     if (currentSettings.keepSidebarLeft && header) {
@@ -174,8 +200,8 @@
       var centeredPrimaryLeft = currentSettings.centerContent && delta > 0
         ? colRect.left + delta
         : colRect.left;
-      var navLeft = Math.max(0, Math.round(centeredPrimaryLeft - navW));
-      document.documentElement.style.setProperty('--aie-nav-left', navLeft + 'px');
+      _lastNavLeft = Math.max(0, Math.round(centeredPrimaryLeft - navW)) + 'px';
+      document.documentElement.style.setProperty('--aie-nav-left', _lastNavLeft);
     }
   }
 
@@ -249,11 +275,33 @@
     }
   }
 
+  var _lastUrl = location.href;
+
+  function onUrlChange() {
+    if (location.href === _lastUrl) return;
+    _lastUrl = location.href;
+    applyCSS(currentSettings);
+  }
+
+  var _origPushState = history.pushState;
+  history.pushState = function () {
+    _origPushState.apply(this, arguments);
+    onUrlChange();
+  };
+  var _origReplaceState = history.replaceState;
+  history.replaceState = function () {
+    _origReplaceState.apply(this, arguments);
+    onUrlChange();
+  };
+  window.addEventListener('popstate', onUrlChange);
+
   var observer = null;
   function startObserver() {
     if (observer) observer.disconnect();
     observer = new MutationObserver(function () {
       if (currentSettings.enabled === false) return;
+      onUrlChange();
+      scheduleCSSRefresh();
       if (currentSettings.followingDefault) maybeForceFollowingTab();
       if (currentSettings.hideDiscoverMore) hideDiscoverMoreContainers();
       if (currentSettings.hideWhoToFollow) hideWhoToFollowInFeed();
