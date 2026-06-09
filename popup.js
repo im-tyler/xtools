@@ -393,15 +393,135 @@ document.getElementById("btn-grok-scan").addEventListener("click", function () {
   });
 });
 
+document.getElementById("btn-grok-export-history").addEventListener("click", function () {
+  var btn = this;
+  var errEl = document.getElementById("grok-error");
+  var successEl = document.getElementById("grok-success");
+  if (!currentTabId) {
+    errEl.style.display = "block";
+    errEl.textContent = "No active tab found.";
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = "Starting...";
+  errEl.style.display = "none";
+  successEl.style.display = "none";
+
+  function finish(resp) {
+    btn.disabled = false;
+    btn.textContent = "Export History";
+    if (!resp || resp.started === false) {
+      errEl.style.display = "block";
+      errEl.textContent = resp && resp.error ? resp.error : "Could not start Grok history export.";
+      return;
+    }
+    successEl.style.display = "block";
+    successEl.textContent = "History export started" + (resp.count ? " (" + resp.count + " conversations)" : "") + ". Watch the Grok page for progress.";
+  }
+
+  function sendStart(allowInject) {
+    chrome.tabs.sendMessage(currentTabId, { action: "grok-export-history-start" }, function (resp) {
+      if (chrome.runtime.lastError) {
+        if (allowInject) {
+          chrome.scripting.executeScript({
+            target: { tabId: currentTabId },
+            files: ["content/twitter.js"]
+          }, function () {
+            if (chrome.runtime.lastError) {
+              btn.disabled = false;
+              btn.textContent = "Export History";
+              errEl.style.display = "block";
+              errEl.textContent = chrome.runtime.lastError.message;
+              return;
+            }
+            sendStart(false);
+          });
+          return;
+        }
+        btn.disabled = false;
+        btn.textContent = "Export History";
+        errEl.style.display = "block";
+        errEl.textContent = chrome.runtime.lastError.message;
+        return;
+      }
+      finish(resp);
+    });
+  }
+
+  sendStart(true);
+});
+
+document.getElementById("btn-grok-delete-all").addEventListener("click", function () {
+  var btn = this;
+  var errEl = document.getElementById("grok-error");
+  var successEl = document.getElementById("grok-success");
+  if (!currentTabId) {
+    errEl.style.display = "block";
+    errEl.textContent = "No active tab found.";
+    return;
+  }
+  if (!window.confirm("Delete all visible Grok chat history? This cannot be undone. Export first if you need a backup.")) {
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Deleting...";
+  errEl.style.display = "none";
+  successEl.style.display = "none";
+
+  function finish(resp) {
+    btn.disabled = false;
+    btn.textContent = "Delete All Chats";
+    if (!resp || resp.started === false) {
+      errEl.style.display = "block";
+      errEl.textContent = resp && resp.error ? resp.error : "Could not start Grok chat deletion.";
+      return;
+    }
+    successEl.style.display = "block";
+    successEl.textContent = "Delete-all started. Watch the Grok page for progress.";
+  }
+
+  function sendStart(allowInject) {
+    chrome.tabs.sendMessage(currentTabId, { action: "grok-delete-all-chats-start" }, function (resp) {
+      if (chrome.runtime.lastError) {
+        if (allowInject) {
+          chrome.scripting.executeScript({
+            target: { tabId: currentTabId },
+            files: ["content/twitter.js"]
+          }, function () {
+            if (chrome.runtime.lastError) {
+              btn.disabled = false;
+              btn.textContent = "Delete All Chats";
+              errEl.style.display = "block";
+              errEl.textContent = chrome.runtime.lastError.message;
+              return;
+            }
+            sendStart(false);
+          });
+          return;
+        }
+        btn.disabled = false;
+        btn.textContent = "Delete All Chats";
+        errEl.style.display = "block";
+        errEl.textContent = chrome.runtime.lastError.message;
+        return;
+      }
+      finish(resp);
+    });
+  }
+
+  sendStart(true);
+});
+
 document.getElementById("btn-grok-export").addEventListener("click", function () {
   if (!_grokQueue.length) return;
   var date = new Date().toISOString().slice(0, 10);
-  // Combined HTML — all conversations in one file
-  downloadStr(buildCombinedHtml(_grokQueue), 'grok_export_' + date + '.html', 'text/html');
-  // Individual MD files — staggered to avoid browser blocking
+  var folder = 'grok_export_' + date;
+  downloadStr(buildCombinedHtml(_grokQueue), folder + '/grok_export_' + date + '.html', 'text/html');
   _grokQueue.forEach(function (conv, i) {
     setTimeout(function () {
-      downloadStr(buildGrokMd(conv), sanitize(conv.title) + '.md', 'text/markdown');
+      var index = String(i + 1).padStart(3, '0');
+      downloadStr(buildGrokMd(conv), folder + '/md/' + index + '_' + sanitize(conv.title) + '.md', 'text/markdown');
     }, 400 + i * 300);
   });
 });
@@ -540,6 +660,7 @@ var defaultTwitterSettings = {
   hideInlinePrompts: true,
   hideSidebar: false,
   centerContent: true,
+  keepSidebarLeft: true,
   hideTrending: true,
   hideWhoToFollow: true,
   hideFloatingChat: true,

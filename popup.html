@@ -193,7 +193,9 @@
         <span id="grok-status">Detecting...</span>
       </div>
       <div class="actions" id="grok-actions" style="display:none;">
-        <button class="btn btn-primary" id="btn-grok-scan">Scan Conversation</button>
+        <button class="btn btn-primary" id="btn-grok-export-history">Export History</button>
+        <button class="btn btn-secondary" id="btn-grok-scan">Scan Conversation</button>
+        <button class="btn btn-danger" id="btn-grok-delete-all">Delete All Chats</button>
       </div>
       <div class="twitter-note" id="grok-note" style="display:none;">Navigate to x.com/i/grok and open a conversation first.</div>
 
@@ -203,7 +205,7 @@
         </div>
         <div id="grok-queue-list" style="padding:0 14px 6px; max-height:120px; overflow-y:auto;"></div>
         <div class="actions">
-          <button class="btn btn-primary" id="btn-grok-export">Export All</button>
+          <button class="btn btn-primary" id="btn-grok-export">Download Queue</button>
           <button class="btn btn-danger" id="btn-grok-clear">Clear Queue</button>
         </div>
       </div>
@@ -269,6 +271,10 @@
         <div class="toggle-row">
           <span>Center content</span>
           <label class="toggle-switch"><input type="checkbox" data-key="centerContent"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <span>Keep sidebar left</span>
+          <label class="toggle-switch"><input type="checkbox" data-key="keepSidebarLeft"><span class="toggle-slider"></span></label>
         </div>
         <div class="toggle-row">
           <span>Hide trending section</span>

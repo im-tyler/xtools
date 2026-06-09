@@ -181,6 +181,21 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   } else if (message.action === "twitter-scan") {
     chrome.scripting.executeScript({ target: { tabId: message.tabId }, func: twitterScanScript });
     sendResponse({ started: true });
+  } else if (message.action === "download-text") {
+    var mime = message.mime || "text/plain";
+    var url = "data:" + mime + ";charset=utf-8," + encodeURIComponent(message.content || "");
+    chrome.downloads.download({
+      url: url,
+      filename: message.filename || "download.txt",
+      conflictAction: "uniquify"
+    }, function (downloadId) {
+      if (chrome.runtime.lastError) {
+        sendResponse({ ok: false, error: chrome.runtime.lastError.message });
+      } else {
+        sendResponse({ ok: true, downloadId: downloadId });
+      }
+    });
+    return true;
   }
   return true;
 });
