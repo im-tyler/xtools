@@ -423,67 +423,50 @@ document.getElementById("btn-grok-debug").addEventListener("click", function () 
     target: { tabId: currentTabId },
     func: function () {
       function txt(el) { return (el.innerText || el.textContent || "").trim(); }
-      function deepBg(el) {
-        var els = [el].concat(Array.prototype.slice.call(el.querySelectorAll("*")));
-        for (var i = 0; i < els.length && i < 80; i++) {
-          var c = getComputedStyle(els[i]).backgroundColor;
-          if (c && c !== "rgba(0, 0, 0, 0)" && c !== "transparent") return c;
-        }
-        return "";
+      function bgOf(el) { return getComputedStyle(el).backgroundColor; }
+      function opaque(c) {
+        if (!c || c === "transparent" || c === "rgba(0, 0, 0, 0)") return false;
+        var m = c.match(/rgba?\(([^)]+)\)/); if (!m) return true;
+        var p = m[1].split(","); return p.length >= 4 ? parseFloat(p[3]) >= 0.9 : true;
       }
       var root = document.querySelector('[data-testid="primaryColumn"]')
         || document.querySelector("main") || document.body;
+      var baseBg = bgOf(document.body);
       var lines = [];
       lines.push("URL: " + location.href);
-      lines.push("root: " + (root.getAttribute("data-testid") || root.tagName));
+      lines.push("body bg: " + baseBg + "   html bg: " + bgOf(document.documentElement));
+      lines.push("");
+      lines.push("=== ELEMENTS WITH OPAQUE NON-BASE BACKGROUND (under primaryColumn) ===");
+      lines.push("(these are what the scanner currently treats as user bubbles)");
       lines.push("");
 
-      // M = largest "solid" text block (one message, not dominated by a single child).
-      var M = null, Mlen = 0;
-      root.querySelectorAll("div,section,article").forEach(function (el) {
-        var t = txt(el).length;
-        if (t < 80 || t <= Mlen) return;
-        var maxChild = 0;
-        for (var i = 0; i < el.children.length; i++) {
-          var ct = txt(el.children[i]).length;
-          if (ct > maxChild) maxChild = ct;
+      var count = 0;
+      var seen = [];
+      root.querySelectorAll("*").forEach(function (el) {
+        if (count > 140) return;
+        var c = bgOf(el);
+        if (!opaque(c) || c === baseBg) return;
+        var t = txt(el);
+        if (t.length === 0) return;
+        // Skip if an ancestor we already printed has the SAME bg (only show outermost).
+        for (var s = 0; s < seen.length; s++) {
+          if (seen[s].bg === c && seen[s].el.contains(el)) return;
         }
-        if (maxChild <= t * 0.55) { Mlen = t; M = el; }
+        seen.push({ el: el, bg: c });
+        count++;
+        var st = getComputedStyle(el), r = el.getBoundingClientRect();
+        lines.push("<" + el.tagName.toLowerCase() + ">"
+          + " bg=" + c
+          + " tlen=" + t.length
+          + " W=" + Math.round(r.width)
+          + " radius=" + st.borderRadius
+          + " dir=" + (el.getAttribute("dir") || "-")
+          + " kids=" + el.childElementCount
+          + " class=" + (el.className || "").toString().slice(0, 55));
+        lines.push('   "' + t.slice(0, 65).replace(/\s+/g, " ") + '"');
       });
-
-      if (!M) {
-        lines.push("NO MESSAGE BLOCK FOUND");
-      } else {
-        // C = lowest ancestor of M with >=2 children carrying real text = the turn container.
-        var C = null, n = M.parentElement;
-        while (n && n !== root.parentElement) {
-          var big = 0;
-          for (var i = 0; i < n.children.length; i++) {
-            if (txt(n.children[i]).length > 10) big++;
-          }
-          if (big >= 2) { C = n; break; }
-          if (n === root) break;
-          n = n.parentElement;
-        }
-        if (!C) C = M.parentElement || M;
-        var cr = C.getBoundingClientRect();
-        lines.push("CONTAINER <" + C.tagName.toLowerCase() + "> children=" + C.childElementCount
-          + " tlen=" + txt(C).length + " L=" + Math.round(cr.left) + " W=" + Math.round(cr.width));
-        lines.push("message block M tlen=" + Mlen);
-        lines.push("");
-        lines.push("=== DIRECT CHILDREN OF CONTAINER (turns) ===");
-        Array.prototype.slice.call(C.children).forEach(function (ch, i) {
-          var t = txt(ch), r = ch.getBoundingClientRect();
-          lines.push("--- child[" + i + "] <" + ch.tagName.toLowerCase() + ">"
-            + " kids=" + ch.childElementCount
-            + " tlen=" + t.length
-            + " L=" + Math.round(r.left) + " W=" + Math.round(r.width)
-            + " align=" + getComputedStyle(ch).textAlign
-            + (deepBg(ch) ? " BG=" + deepBg(ch) : ""));
-          lines.push('  START: "' + t.slice(0, 80).replace(/\s+/g, " ") + '"');
-          if (t.length > 80) lines.push('  END:   "' + t.slice(-80).replace(/\s+/g, " ") + '"');
-        });
-      }
+      lines.push("");
+      lines.push("total outermost opaque-bg text elements: " + count);
 
       var out = lines.join("\n");
       var blob = new Blob([out], { type: "text/plain" });
