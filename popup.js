@@ -431,50 +431,65 @@ document.getElementById("btn-grok-debug").addEventListener("click", function () 
     target: { tabId: currentTabId },
     func: function () {
       function txt(el) { return (el.innerText || el.textContent || "").trim(); }
-      function bgOf(el) { return getComputedStyle(el).backgroundColor; }
-      function opaque(c) {
-        if (!c || c === "transparent" || c === "rgba(0, 0, 0, 0)") return false;
-        var m = c.match(/rgba?\(([^)]+)\)/); if (!m) return true;
-        var p = m[1].split(","); return p.length >= 4 ? parseFloat(p[3]) >= 0.9 : true;
-      }
-      var root = document.querySelector('[data-testid="primaryColumn"]')
-        || document.querySelector("main") || document.body;
-      var baseBg = bgOf(document.body);
       var lines = [];
       lines.push("URL: " + location.href);
-      lines.push("body bg: " + baseBg + "   html bg: " + bgOf(document.documentElement));
-      lines.push("");
-      lines.push("=== ELEMENTS WITH OPAQUE NON-BASE BACKGROUND (under primaryColumn) ===");
-      lines.push("(these are what the scanner currently treats as user bubbles)");
       lines.push("");
 
-      var count = 0;
-      var seen = [];
-      root.querySelectorAll("*").forEach(function (el) {
-        if (count > 140) return;
-        var c = bgOf(el);
-        if (!opaque(c) || c === baseBg) return;
-        var t = txt(el);
-        if (t.length === 0) return;
-        // Skip if an ancestor we already printed has the SAME bg (only show outermost).
-        for (var s = 0; s < seen.length; s++) {
-          if (seen[s].bg === c && seen[s].el.contains(el)) return;
-        }
-        seen.push({ el: el, bg: c });
-        count++;
-        var st = getComputedStyle(el), r = el.getBoundingClientRect();
-        lines.push("<" + el.tagName.toLowerCase() + ">"
-          + " bg=" + c
-          + " tlen=" + t.length
-          + " W=" + Math.round(r.width)
-          + " radius=" + st.borderRadius
-          + " dir=" + (el.getAttribute("dir") || "-")
-          + " kids=" + el.childElementCount
-          + " class=" + (el.className || "").toString().slice(0, 55));
-        lines.push('   "' + t.slice(0, 65).replace(/\s+/g, " ") + '"');
+      // --- History links: any anchor pointing at a Grok conversation ---
+      lines.push("=== CONVERSATION LINKS (<a href> containing grok/conversation) ===");
+      var linkCount = 0;
+      document.querySelectorAll("a[href]").forEach(function (a) {
+        var h = a.getAttribute("href") || "";
+        if (!/grok|conversation/i.test(h)) return;
+        linkCount++;
+        if (linkCount <= 60) lines.push("  href=" + h + "  text=\"" + txt(a).slice(0, 40).replace(/\s+/g, " ") + "\"");
+      });
+      lines.push("total conversation links: " + linkCount);
+      lines.push("");
+
+      // --- Dialog / history panel structure ---
+      lines.push("=== role=dialog PANELS ===");
+      document.querySelectorAll('[role="dialog"]').forEach(function (d, di) {
+        var dr = d.getBoundingClientRect();
+        lines.push("dialog[" + di + "] W=" + Math.round(dr.width) + " H=" + Math.round(dr.height)
+          + " text0=\"" + txt(d).slice(0, 50).replace(/\s+/g, " ") + "\"");
+        // find a scrollable descendant (the history list)
+        d.querySelectorAll("div").forEach(function (el) {
+          var oy = getComputedStyle(el).overflowY;
+          if ((oy === "auto" || oy === "scroll") && el.scrollHeight > el.clientHeight + 40) {
+            lines.push("  SCROLLER kids=" + el.childElementCount
+              + " scrollH=" + el.scrollHeight + " clientH=" + el.clientHeight
+              + " testid=" + (el.getAttribute("data-testid") || "-"));
+            // sample first few row children
+            var rows = el.children.length ? el.children[0].children : [];
+            for (var i = 0; i < Math.min(rows.length, 6); i++) {
+              var row = rows[i];
+              var link = row.querySelector ? row.querySelector("a[href]") : null;
+              lines.push("    row[" + i + "] <" + row.tagName.toLowerCase() + ">"
+                + " tag-a=" + (link ? (link.getAttribute("href") || "yes") : "none")
+                + " testid=" + (row.getAttribute && row.getAttribute("data-testid") || "-")
+                + " \"" + txt(row).slice(0, 40).replace(/\s+/g, " ") + "\"");
+            }
+          }
+        });
       });
       lines.push("");
-      lines.push("total outermost opaque-bg text elements: " + count);
+
+      // --- Fallback: elements that look like history rows (have a conversation link) ---
+      lines.push("=== SAMPLE CLICKABLE HISTORY ROWS ===");
+      var rc = 0;
+      document.querySelectorAll('[role="link"],[role="button"],[data-testid]').forEach(function (el) {
+        if (rc >= 25) return;
+        var t = txt(el);
+        if (t.length < 3 || t.length > 80) return;
+        var r = el.getBoundingClientRect();
+        if (r.left < 150 || r.width > 400) return; // history sits in a narrow side panel
+        rc++;
+        lines.push("  <" + el.tagName.toLowerCase() + "> role=" + (el.getAttribute("role") || "-")
+          + " testid=" + (el.getAttribute("data-testid") || "-")
+          + " L=" + Math.round(r.left) + " W=" + Math.round(r.width)
+          + " \"" + t.slice(0, 45).replace(/\s+/g, " ") + "\"");
+      });
 
       var out = lines.join("\n");
       var blob = new Blob([out], { type: "text/plain" });
