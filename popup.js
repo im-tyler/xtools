@@ -447,6 +447,25 @@ document.getElementById("btn-grok-debug").addEventListener("click", function () 
       lines.push("total conversation links: " + linkCount);
       lines.push("");
 
+      // --- Buttons / aria-labels (find the History toggle) ---
+      lines.push("=== BUTTONS & ARIA-LABELS (to locate History toggle) ===");
+      var bc = 0;
+      document.querySelectorAll('button,[role="button"],[aria-label],a[aria-label]').forEach(function (el) {
+        if (bc >= 60) return;
+        var al = el.getAttribute("aria-label") || "";
+        var t = txt(el);
+        var label = al || t;
+        if (!label || label.length > 40) return;
+        var r = el.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) return;
+        bc++;
+        lines.push("  <" + el.tagName.toLowerCase() + "> aria=\"" + al.slice(0, 30) + "\""
+          + " testid=" + (el.getAttribute("data-testid") || "-")
+          + " L=" + Math.round(r.left) + " T=" + Math.round(r.top)
+          + " text=\"" + t.slice(0, 25).replace(/\s+/g, " ") + "\"");
+      });
+      lines.push("");
+
       // --- Dialog / history panel structure ---
       lines.push("=== role=dialog PANELS ===");
       document.querySelectorAll('[role="dialog"]').forEach(function (d, di) {
