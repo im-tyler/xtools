@@ -342,6 +342,93 @@ document.getElementById("btn-grok-clear").addEventListener("click", function () 
   renderQueue();
 });
 
+document.getElementById("btn-grok-debug").addEventListener("click", function () {
+  var btn = this;
+  var errEl = document.getElementById("grok-error");
+  var successEl = document.getElementById("grok-success");
+  if (!currentTabId) {
+    errEl.style.display = "block";
+    errEl.textContent = "No active tab found.";
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = "Dumping...";
+  errEl.style.display = "none";
+  successEl.style.display = "none";
+
+  chrome.scripting.executeScript({
+    target: { tabId: currentTabId },
+    func: function () {
+      function txt(el) { return (el.innerText || el.textContent || "").trim(); }
+      var lines = [];
+      lines.push("URL: " + location.href);
+      lines.push("title: " + document.title);
+      lines.push("iframes: " + document.querySelectorAll("iframe").length);
+      var shadow = 0;
+      document.querySelectorAll("*").forEach(function (e) { if (e.shadowRoot) shadow++; });
+      lines.push("shadowRoots: " + shadow);
+
+      // Collect candidate text blocks across the document.
+      var blocks = [];
+      document.querySelectorAll("div,section,article,p,span,li").forEach(function (el) {
+        var t = txt(el);
+        if (t.length > 40 && t.length < 12000 && el.children.length < 80) blocks.push(el);
+      });
+      lines.push("candidate text blocks: " + blocks.length);
+      lines.push("");
+      lines.push("=== TOP 30 TEXT BLOCKS (document order) ===");
+      blocks.slice(0, 30).forEach(function (el, i) {
+        var t = txt(el);
+        lines.push("[" + i + "] <" + el.tagName.toLowerCase() + ">"
+          + " tid=" + (el.getAttribute("data-testid") || "-")
+          + " role=" + (el.getAttribute("role") || "-")
+          + " kids=" + el.children.length
+          + " len=" + t.length
+          + " class=" + (el.className || "").toString().slice(0, 60));
+        lines.push('     "' + t.slice(0, 90).replace(/\s+/g, " ") + '"');
+      });
+
+      // Ancestor chain of the longest block — reveals the message wrapper structure.
+      var longest = null, maxLen = 0;
+      blocks.forEach(function (el) { var l = txt(el).length; if (l > maxLen) { maxLen = l; longest = el; } });
+      if (longest) {
+        lines.push("");
+        lines.push("=== ANCESTOR CHAIN OF LONGEST BLOCK (len " + maxLen + ") ===");
+        var n = longest, d = 0;
+        while (n && n !== document.body && d < 20) {
+          var r = n.getBoundingClientRect();
+          lines.push(d + ": <" + n.tagName.toLowerCase() + ">"
+            + " tid=" + (n.getAttribute("data-testid") || "-")
+            + " role=" + (n.getAttribute("role") || "-")
+            + " kids=" + n.children.length
+            + " w=" + Math.round(r.width)
+            + " class=" + (n.className || "").toString().slice(0, 70));
+          n = n.parentElement; d++;
+        }
+      }
+
+      var out = lines.join("\n");
+      var blob = new Blob([out], { type: "text/plain" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = "grok_debug.txt";
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+      return true;
+    }
+  }, function () {
+    btn.disabled = false;
+    btn.textContent = "Dump DOM (debug)";
+    if (chrome.runtime.lastError) {
+      errEl.style.display = "block";
+      errEl.textContent = chrome.runtime.lastError.message;
+      return;
+    }
+    successEl.style.display = "block";
+    successEl.textContent = "Saved grok_debug.txt — send me its contents.";
+  });
+});
+
 document.getElementById("btn-screenshot").addEventListener("click", function () {
   if (!currentTabId) return;
   document.getElementById("btn-screenshot").disabled = true;
