@@ -431,93 +431,62 @@ document.getElementById("btn-grok-debug").addEventListener("click", function () 
     target: { tabId: currentTabId },
     func: function () {
       function txt(el) { return (el.innerText || el.textContent || "").trim(); }
-      var lines = [];
-      lines.push("URL: " + location.href);
-      lines.push("");
-
-      // --- History links: any anchor pointing at a Grok conversation ---
-      lines.push("=== CONVERSATION LINKS (<a href> containing grok/conversation) ===");
-      var linkCount = 0;
-      document.querySelectorAll("a[href]").forEach(function (a) {
-        var h = a.getAttribute("href") || "";
-        if (!/grok|conversation/i.test(h)) return;
-        linkCount++;
-        if (linkCount <= 60) lines.push("  href=" + h + "  text=\"" + txt(a).slice(0, 40).replace(/\s+/g, " ") + "\"");
-      });
-      lines.push("total conversation links: " + linkCount);
-      lines.push("");
-
-      // --- Buttons / aria-labels (find the History toggle) ---
-      lines.push("=== BUTTONS & ARIA-LABELS (to locate History toggle) ===");
-      var bc = 0;
-      document.querySelectorAll('button,[role="button"],[aria-label],a[aria-label]').forEach(function (el) {
-        if (bc >= 60) return;
-        var al = el.getAttribute("aria-label") || "";
-        var t = txt(el);
-        var label = al || t;
-        if (!label || label.length > 40) return;
-        var r = el.getBoundingClientRect();
-        if (r.width === 0 && r.height === 0) return;
-        bc++;
-        lines.push("  <" + el.tagName.toLowerCase() + "> aria=\"" + al.slice(0, 30) + "\""
-          + " testid=" + (el.getAttribute("data-testid") || "-")
-          + " L=" + Math.round(r.left) + " T=" + Math.round(r.top)
-          + " text=\"" + t.slice(0, 25).replace(/\s+/g, " ") + "\"");
-      });
-      lines.push("");
-
-      // --- Dialog / history panel structure ---
-      lines.push("=== role=dialog PANELS ===");
-      document.querySelectorAll('[role="dialog"]').forEach(function (d, di) {
-        var dr = d.getBoundingClientRect();
-        lines.push("dialog[" + di + "] W=" + Math.round(dr.width) + " H=" + Math.round(dr.height)
-          + " text0=\"" + txt(d).slice(0, 50).replace(/\s+/g, " ") + "\"");
-        // find a scrollable descendant (the history list)
-        d.querySelectorAll("div").forEach(function (el) {
-          var oy = getComputedStyle(el).overflowY;
-          if ((oy === "auto" || oy === "scroll") && el.scrollHeight > el.clientHeight + 40) {
-            lines.push("  SCROLLER kids=" + el.childElementCount
-              + " scrollH=" + el.scrollHeight + " clientH=" + el.clientHeight
-              + " testid=" + (el.getAttribute("data-testid") || "-"));
-            // sample first few row children
-            var rows = el.children.length ? el.children[0].children : [];
-            for (var i = 0; i < Math.min(rows.length, 6); i++) {
-              var row = rows[i];
-              var link = row.querySelector ? row.querySelector("a[href]") : null;
-              lines.push("    row[" + i + "] <" + row.tagName.toLowerCase() + ">"
-                + " tag-a=" + (link ? (link.getAttribute("href") || "yes") : "none")
-                + " testid=" + (row.getAttribute && row.getAttribute("data-testid") || "-")
-                + " \"" + txt(row).slice(0, 40).replace(/\s+/g, " ") + "\"");
-            }
-          }
+      function collect() {
+        var lines = [];
+        lines.push("URL: " + location.href);
+        lines.push("");
+        lines.push("=== CONVERSATION LINKS (a[href]) ===");
+        var lc = 0;
+        document.querySelectorAll("a[href]").forEach(function (a) {
+          var h = a.getAttribute("href") || "";
+          if (!/conversation|\/i\/grok\//i.test(h)) return;
+          lc++;
+          if (lc <= 80) lines.push("  href=" + h + "  text=\"" + txt(a).slice(0, 45).replace(/\s+/g, " ") + "\"");
         });
-      });
-      lines.push("");
+        lines.push("total conversation links: " + lc);
+        lines.push("");
+        lines.push("=== role=dialog PANELS ===");
+        document.querySelectorAll('[role="dialog"]').forEach(function (d, di) {
+          var dr = d.getBoundingClientRect();
+          lines.push("dialog[" + di + "] W=" + Math.round(dr.width) + " H=" + Math.round(dr.height)
+            + " text0=\"" + txt(d).slice(0, 60).replace(/\s+/g, " ") + "\"");
+          d.querySelectorAll("div").forEach(function (el) {
+            var oy = getComputedStyle(el).overflowY;
+            if ((oy !== "auto" && oy !== "scroll") || el.scrollHeight <= el.clientHeight + 40) return;
+            lines.push("  SCROLLER kids=" + el.childElementCount
+              + " scrollH=" + el.scrollHeight + " clientH=" + el.clientHeight);
+            var rn = 0;
+            el.querySelectorAll('a[href],[role="link"],[role="button"]').forEach(function (row) {
+              if (rn >= 18) return;
+              var t = txt(row);
+              if (t.length < 2 || t.length > 70) return;
+              rn++;
+              lines.push("    <" + row.tagName.toLowerCase() + "> role=" + (row.getAttribute("role") || "-")
+                + " href=" + (row.getAttribute("href") || "-")
+                + " testid=" + (row.getAttribute("data-testid") || "-")
+                + " \"" + t.slice(0, 45).replace(/\s+/g, " ") + "\"");
+            });
+          });
+        });
+        return lines.join("\n");
+      }
 
-      // --- Fallback: elements that look like history rows (have a conversation link) ---
-      lines.push("=== SAMPLE CLICKABLE HISTORY ROWS ===");
-      var rc = 0;
-      document.querySelectorAll('[role="link"],[role="button"],[data-testid]').forEach(function (el) {
-        if (rc >= 25) return;
-        var t = txt(el);
-        if (t.length < 3 || t.length > 80) return;
-        var r = el.getBoundingClientRect();
-        if (r.left < 150 || r.width > 400) return; // history sits in a narrow side panel
-        rc++;
-        lines.push("  <" + el.tagName.toLowerCase() + "> role=" + (el.getAttribute("role") || "-")
-          + " testid=" + (el.getAttribute("data-testid") || "-")
-          + " L=" + Math.round(r.left) + " W=" + Math.round(r.width)
-          + " \"" + t.slice(0, 45).replace(/\s+/g, " ") + "\"");
+      return new Promise(function (resolve) {
+        var before = location.href;
+        var hist = document.querySelector('button[aria-label="Chat history"]');
+        var pre = "Chat history button: " + (hist ? "FOUND" : "NOT FOUND") + "\n";
+        if (hist) hist.click();
+        setTimeout(function () {
+          var out = pre + "after-click URL: " + location.href + " (was " + before + ")\n\n" + collect();
+          var blob = new Blob([out], { type: "text/plain" });
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement("a");
+          a.href = url; a.download = "grok_debug.txt";
+          document.body.appendChild(a); a.click();
+          document.body.removeChild(a); URL.revokeObjectURL(url);
+          resolve(true);
+        }, 1300);
       });
-
-      var out = lines.join("\n");
-      var blob = new Blob([out], { type: "text/plain" });
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement("a");
-      a.href = url; a.download = "grok_debug.txt";
-      document.body.appendChild(a); a.click();
-      document.body.removeChild(a); URL.revokeObjectURL(url);
-      return true;
     }
   }, function () {
     btn.disabled = false;
