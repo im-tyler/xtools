@@ -195,18 +195,21 @@
       <div class="actions" id="grok-actions" style="display:none;">
         <button class="btn btn-primary" id="btn-grok-scan">Scan Conversation</button>
       </div>
-      <div class="twitter-note" id="grok-note" style="display:none;">Open x.com/i/grok and open a conversation first.</div>
-      <div id="grok-results" style="display:none;">
-        <div class="status" style="border-top:1px solid #0f3460;">
-          <span id="grok-count" style="font-size:12px;color:#a0a0b0;"></span>
+      <div class="twitter-note" id="grok-note" style="display:none;">Navigate to x.com/i/grok and open a conversation first.</div>
+
+      <div id="grok-queue" style="display:none;">
+        <div class="status" style="border-top:1px solid #0f3460; padding-top:8px;">
+          <span id="grok-queue-label" style="font-size:12px;color:#a0a0b0;"></span>
         </div>
+        <div id="grok-queue-list" style="padding:0 14px 6px; max-height:120px; overflow-y:auto;"></div>
         <div class="actions">
-          <button class="btn btn-primary" id="btn-grok-md">Download Markdown</button>
-          <button class="btn btn-secondary" id="btn-grok-html">Download HTML</button>
-          <button class="btn btn-secondary" id="btn-grok-copy">Copy to Clipboard</button>
+          <button class="btn btn-primary" id="btn-grok-export">Export All</button>
+          <button class="btn btn-danger" id="btn-grok-clear">Clear Queue</button>
         </div>
       </div>
-      <div class="result" id="grok-error" style="display:none;color:#ef4444;"></div>
+
+      <div class="result" id="grok-error" style="display:none; color:#ef4444; padding:8px 14px;"></div>
+      <div class="result" id="grok-success" style="display:none; padding:8px 14px;"></div>
     </div>
 
     <div class="page" id="page-screenshot">

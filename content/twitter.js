@@ -36,7 +36,7 @@
     hideDiscoverMore: function () { return ""; },
     hideInlinePrompts: function () { return ""; },
     hideSidebar: function () { return '[data-testid="sidebarColumn"] { display: none !important; }'; },
-    centerContent: function () { return '[data-testid="sidebarColumn"] { display: none !important; } [data-testid="primaryColumn"] { transform: translateX(var(--aie-tx, 0px)) !important; }'; },
+    centerContent: function () { return '[data-testid="sidebarColumn"] { display: none !important; } header[role="banner"], [data-testid="primaryColumn"] { transform: translateX(var(--aie-tx, 0px)) !important; }'; },
     hideTrending: function () { return '[data-testid="sidebarColumn"] [data-testid="trend"] { display: none !important; }'; },
     hideWhoToFollow: function () { return '[aria-label="Who to follow"], [data-testid="WhoToFollow"], [data-testid="sidebarColumn"] [data-testid="UserCell"] { display: none !important; }'; },
     hideViews: function () { return '[data-testid="views"] { display: none !important; }'; },
@@ -161,6 +161,7 @@
     if (colW < 400 || colW > 750) return;
 
     var delta = Math.round((viewW - colW) / 2 - colRect.left);
+    if (delta <= 0) return;
     document.documentElement.style.setProperty('--aie-tx', delta + 'px');
   }
 

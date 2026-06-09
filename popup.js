@@ -34,12 +34,16 @@ chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
   actions.style.display = "flex";
 });
 
-var _grokData = null;
+var _grokQueue = []; // accumulated conversations across scans
+
+function sanitize(s) {
+  return (s || 'grok_chat').replace(/[^a-z0-9_\-\s]/gi, '').replace(/\s+/g, '_').toLowerCase().slice(0, 60) || 'grok_chat';
+}
 
 function buildGrokMd(conv) {
-  var lines = ['> Exported from Grok on ' + new Date().toLocaleString(), '', '---', '', '# ' + conv.title, ''];
+  var lines = ['> Exported from Grok — ' + new Date().toLocaleString(), '', '# ' + conv.title, ''];
   conv.messages.forEach(function (msg) {
-    lines.push(msg.role === 'user' ? '**You**:' : '**Grok**:');
+    lines.push('**' + (msg.role === 'user' ? 'You' : 'Grok') + '**');
     lines.push('');
     lines.push(msg.content.trim());
     lines.push('');
@@ -49,21 +53,41 @@ function buildGrokMd(conv) {
   return lines.join('\n');
 }
 
-function buildGrokHtml(conv) {
+function buildCombinedHtml(conversations) {
   var esc = function (s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
-  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + esc(conv.title) + '</title>'
-    + '<style>body{font-family:system-ui,sans-serif;max-width:800px;margin:0 auto;padding:20px;background:#1a1a2e;color:#eaeaea}'
-    + 'h1{color:#e94560}.msg{margin:12px 0;padding:12px 16px;border-radius:8px}'
+  var date = new Date().toLocaleString();
+  var css = 'html{height:100%}'
+    + 'body{margin:0;font-family:system-ui,sans-serif;background:#1a1a2e;color:#eaeaea;display:flex;min-height:100%}'
+    + 'nav{width:220px;flex-shrink:0;background:#0d0d1f;padding:20px 14px;position:sticky;top:0;height:100vh;overflow-y:auto;box-sizing:border-box}'
+    + 'nav h2{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#555;margin-bottom:12px}'
+    + 'nav a{display:block;font-size:12px;color:#a0a0b0;text-decoration:none;padding:5px 8px;border-radius:4px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    + 'nav a:hover{background:#16213e;color:#eaeaea}'
+    + 'main{flex:1;padding:40px;max-width:860px}'
+    + 'h1.page-title{font-size:22px;color:#e94560;margin-bottom:4px}'
+    + '.export-date{font-size:11px;color:#555;margin-bottom:40px}'
+    + 'section{margin-bottom:60px}'
+    + 'h2.conv-title{font-size:17px;color:#e94560;margin-bottom:20px;padding-bottom:8px;border-bottom:1px solid #0f3460}'
+    + '.msg{margin:10px 0;padding:12px 16px;border-radius:8px}'
     + '.user{background:#16213e}.grok{background:#0f3460}'
-    + '.role{font-size:11px;font-weight:600;color:#e94560;margin-bottom:4px}'
-    + '.content{white-space:pre-wrap;line-height:1.6}</style></head><body>'
-    + '<h1>' + esc(conv.title) + '</h1>';
-  conv.messages.forEach(function (msg) {
-    html += '<div class="msg ' + (msg.role === 'user' ? 'user' : 'grok') + '">'
-      + '<div class="role">' + esc(msg.role === 'user' ? 'You' : 'Grok') + '</div>'
-      + '<div class="content">' + esc(msg.content) + '</div></div>';
+    + '.role{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#e94560;margin-bottom:6px}'
+    + '.content{white-space:pre-wrap;line-height:1.65;font-size:14px}';
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Grok Export</title><style>' + css + '</style></head><body>';
+  html += '<nav><h2>Conversations</h2>';
+  conversations.forEach(function (conv, i) {
+    html += '<a href="#conv-' + i + '" title="' + esc(conv.title) + '">' + esc(conv.title) + '</a>';
   });
-  return html + '</body></html>';
+  html += '</nav><main>';
+  html += '<h1 class="page-title">Grok Export</h1><div class="export-date">' + esc(date) + ' &middot; ' + conversations.length + ' conversation' + (conversations.length !== 1 ? 's' : '') + '</div>';
+  conversations.forEach(function (conv, i) {
+    html += '<section id="conv-' + i + '"><h2 class="conv-title">' + esc(conv.title) + '</h2>';
+    conv.messages.forEach(function (msg) {
+      html += '<div class="msg ' + (msg.role === 'user' ? 'user' : 'grok') + '">'
+        + '<div class="role">' + esc(msg.role === 'user' ? 'You' : 'Grok') + '</div>'
+        + '<div class="content">' + esc(msg.content) + '</div></div>';
+    });
+    html += '</section>';
+  });
+  return html + '</main></body></html>';
 }
 
 function downloadStr(str, filename, mime) {
@@ -71,13 +95,34 @@ function downloadStr(str, filename, mime) {
   chrome.downloads.download({ url: encoded, filename: filename });
 }
 
-function sanitize(s) {
-  return (s || 'grok_chat').replace(/[^a-z0-9_\-\s]/gi, '').replace(/\s+/g, '_').toLowerCase().slice(0, 60) || 'grok_chat';
+function renderQueue() {
+  var queueEl = document.getElementById('grok-queue');
+  var labelEl = document.getElementById('grok-queue-label');
+  var listEl  = document.getElementById('grok-queue-list');
+  if (!_grokQueue.length) { queueEl.style.display = 'none'; return; }
+  queueEl.style.display = 'block';
+  var n = _grokQueue.length;
+  labelEl.textContent = n + ' conversation' + (n !== 1 ? 's' : '') + ' queued';
+  listEl.innerHTML = '';
+  _grokQueue.forEach(function (conv, i) {
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:3px 0;';
+    var title = document.createElement('span');
+    title.style.cssText = 'font-size:11px;color:#c9c9d9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;';
+    title.textContent = conv.title;
+    var count = document.createElement('span');
+    count.style.cssText = 'font-size:10px;color:#555;margin-left:8px;flex-shrink:0;';
+    count.textContent = conv.messages.length + ' msg';
+    row.appendChild(title);
+    row.appendChild(count);
+    listEl.appendChild(row);
+  });
 }
 
 document.getElementById("btn-grok-scan").addEventListener("click", function () {
   var btn = this;
   var errEl = document.getElementById("grok-error");
+  var successEl = document.getElementById("grok-success");
   if (!currentTabId) {
     errEl.style.display = "block";
     errEl.textContent = "No active tab found.";
@@ -86,7 +131,7 @@ document.getElementById("btn-grok-scan").addEventListener("click", function () {
   btn.disabled = true;
   btn.textContent = 'Scanning...';
   errEl.style.display = "none";
-  document.getElementById("grok-results").style.display = "none";
+  successEl.style.display = "none";
 
   chrome.scripting.executeScript({
     target: { tabId: currentTabId },
@@ -257,35 +302,44 @@ document.getElementById("btn-grok-scan").addEventListener("click", function () {
               || l.includes('conv') || l.includes('chat') || l.includes('turn')
               || l.includes('response') || l.includes('query') || l.includes('user');
         });
-        dbg = rel.length ? ' IDs: ' + rel.join(', ') : ' (no relevant test IDs found — check console)';
+        dbg = rel.length ? ' IDs: ' + rel.join(', ') : ' (no relevant test IDs — check console)';
         console.log('[Grok Export] All data-testids on page:', result.debugIds);
       }
       errEl.textContent = "No messages found — open a conversation first (not just the history list)." + dbg;
       return;
     }
-    _grokData = result;
-    document.getElementById("grok-count").textContent = result.messages.length + ' messages in "' + result.title + '"';
-    document.getElementById("grok-results").style.display = "block";
+    // Replace existing entry with same title, or append
+    var idx = _grokQueue.findIndex(function (c) { return c.title === result.title; });
+    if (idx >= 0) {
+      _grokQueue[idx] = result;
+      successEl.textContent = 'Updated "' + result.title + '" (' + result.messages.length + ' messages)';
+    } else {
+      _grokQueue.push(result);
+      successEl.textContent = 'Added "' + result.title + '" (' + result.messages.length + ' messages)';
+    }
+    successEl.style.display = "block";
+    renderQueue();
   });
 });
 
-document.getElementById("btn-grok-md").addEventListener("click", function () {
-  if (!_grokData) return;
-  downloadStr(buildGrokMd(_grokData), sanitize(_grokData.title) + '.md', 'text/markdown');
-});
-
-document.getElementById("btn-grok-html").addEventListener("click", function () {
-  if (!_grokData) return;
-  downloadStr(buildGrokHtml(_grokData), sanitize(_grokData.title) + '.html', 'text/html');
-});
-
-document.getElementById("btn-grok-copy").addEventListener("click", function () {
-  if (!_grokData) return;
-  var btn = this;
-  navigator.clipboard.writeText(buildGrokMd(_grokData)).then(function () {
-    btn.textContent = 'Copied!';
-    setTimeout(function () { btn.textContent = 'Copy to Clipboard'; }, 1500);
+document.getElementById("btn-grok-export").addEventListener("click", function () {
+  if (!_grokQueue.length) return;
+  var date = new Date().toISOString().slice(0, 10);
+  // Combined HTML — all conversations in one file
+  downloadStr(buildCombinedHtml(_grokQueue), 'grok_export_' + date + '.html', 'text/html');
+  // Individual MD files — staggered to avoid browser blocking
+  _grokQueue.forEach(function (conv, i) {
+    setTimeout(function () {
+      downloadStr(buildGrokMd(conv), sanitize(conv.title) + '.md', 'text/markdown');
+    }, 400 + i * 300);
   });
+});
+
+document.getElementById("btn-grok-clear").addEventListener("click", function () {
+  _grokQueue = [];
+  document.getElementById("grok-success").style.display = "none";
+  document.getElementById("grok-error").style.display = "none";
+  renderQueue();
 });
 
 document.getElementById("btn-screenshot").addEventListener("click", function () {
