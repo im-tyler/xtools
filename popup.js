@@ -221,7 +221,15 @@ document.getElementById("btn-grok-scan").addEventListener("click", function () {
         }
         var baseBg = bgOf(document.body);
         if (!opaque(baseBg)) baseBg = bgOf(document.documentElement);
-        function isBubble(el) { return opaque(bgOf(el)) && bgOf(el) !== baseBg && gtxt(el).length > 0; }
+        // A user message sits in a rounded <div> bubble (border-radius ~24px). Code blocks
+        // (<pre>) and table rows (<tr>) also have opaque backgrounds but are square-ish and
+        // non-div, so require a div with a sizable corner radius to avoid splitting them out.
+        function isBubble(el) {
+          if (el.tagName !== "DIV") return false;
+          if (parseFloat(getComputedStyle(el).borderTopLeftRadius) < 16) return false;
+          var c = bgOf(el);
+          return opaque(c) && c !== baseBg && gtxt(el).length > 0;
+        }
 
         // Largest "solid" block = one message (text not dominated by a single child).
         var M = null, Mlen = 0;
