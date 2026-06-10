@@ -863,16 +863,33 @@
 
   function grokClick(el) {
     if (!el) return false;
+    var anchor = el.closest('a[href]');
+    var saved = anchor ? anchor.getAttribute('href') : null;
+    if (saved) anchor.removeAttribute('href');
     el.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, view: window }));
     el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }));
     el.click();
+    if (saved) setTimeout(function () { anchor.setAttribute('href', saved); }, 200);
     return true;
   }
 
   function grokFindDeleteTarget(root) {
-    var candidates = Array.from(root.querySelectorAll('button,[role="button"],[role="menuitem"]'));
+    var candidates = Array.from(root.querySelectorAll('button,[role="button"],[role="menuitem"],div,span,a'));
     return candidates.filter(grokIsVisible).filter(function (el) {
-      return /\b(delete|remove)\b/i.test(grokElementLabel(el));
+      var rect = el.getBoundingClientRect();
+      if (rect.width > 400 || rect.height > 80 || rect.width < 20 || rect.height < 10) return false;
+      var label = grokElementLabel(el);
+      if (!/\b(delete|remove)\b/i.test(label)) return false;
+      var childMatch = Array.from(el.querySelectorAll('button,[role="button"],[role="menuitem"],div,span')).some(function (child) {
+        var cr = child.getBoundingClientRect();
+        if (cr.width > 10 && cr.height > 5) {
+          var cl = grokElementLabel(child);
+          return /\b(delete|remove)\b/i.test(cl);
+        }
+        return false;
+      });
+      if (childMatch) return false;
+      return true;
     })[0] || null;
   }
 
@@ -911,90 +928,71 @@
     return false;
   }
 
-  async function grokDeleteHistoryItem(item) {
-    grokDispatchHover(item.row);
-    item.row.scrollIntoView({ block: "center" });
-    await grokSleep(250);
-    grokDispatchHover(item.row);
+  function grokExtractCsrf() {
+    var m = document.cookie.match(/ct0=([^;]+)/);
+    return m ? m[1] : '';
+  }
 
-    var directDelete = grokFindDeleteTarget(item.row);
-    if (directDelete) {
-      grokClick(directDelete);
-      await grokSleep(250);
-      return grokConfirmDeleteDialog();
+  async function grokApiDeleteConversation(conversationId, debug) {
+    var csrf = grokExtractCsrf();
+    var url = '/i/api/graphql/TlKHSWVMVeaa-i7dqQqFQA/ConversationItem_DeleteConversationMutation';
+    var body = JSON.stringify({
+      variables: { conversationId: conversationId },
+      features: {},
+    });
+    var resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
+        'x-csrf-token': csrf,
+        'x-twitter-active-user': 'yes',
+        'x-twitter-auth-type': 'OAuth2Session',
+        'x-twitter-client-language': 'en',
+        'content-type': 'application/json',
+      },
+      credentials: 'include',
+      body: body,
+    });
+    var respBody = '';
+    try { respBody = await resp.text(); } catch (e) {}
+    if (debug) {
+      grokSetOverlay('API debug: status=' + resp.status, respBody.slice(0, 300));
     }
+    return resp.ok;
+  }
 
-    var options = grokFindOptionsButton(item.row);
-    if (!options) return false;
-    grokClick(options);
-    await grokSleep(350);
-
-    var menuDelete = grokFindDeleteTarget(document.body);
-    if (!menuDelete) return false;
-    grokClick(menuDelete);
-    await grokSleep(250);
-    return grokConfirmDeleteDialog();
+  async function grokDeleteHistoryItem(item) {
+    try {
+      return await grokApiDeleteConversation(item.id);
+    } catch (e) {
+      return false;
+    }
   }
 
   async function grokDeleteAllChatsRunner() {
     if (window.__kagiGrokDeleteAllRunning) return;
     window.__kagiGrokDeleteAllRunning = true;
     try {
-      grokSetOverlay("Opening history panel for deletion...");
-      var dialog = grokHistoryDialog();
-      if (!dialog) {
-        var hist = document.querySelector('button[aria-label="Chat history"]');
-        if (!hist) throw new Error('Could not find the "Chat history" button.');
-        hist.click();
-        await grokSleep(1300);
-        dialog = grokHistoryDialog();
-      }
-      if (!dialog) throw new Error("Could not open the history dialog.");
+      grokSetOverlay("Harvesting conversation IDs...");
+      var links = await grokHarvestHistoryLinks();
+      if (!links.length) throw new Error("No conversations found in history.");
 
-      var scroller = grokHistoryScroller(dialog);
-      if (!scroller) throw new Error("Could not find the history list scroller.");
-      scroller.scrollTop = 0;
-      await grokSleep(500);
-
+      grokSetOverlay("Deleting " + links.length + " conversations...", "0 / " + links.length);
       var deleted = 0;
-      var misses = 0;
-      for (var attempt = 0; attempt < 1200; attempt++) {
-        var items = grokVisibleHistoryItems(scroller);
-        if (!items.length) {
-          if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 12) break;
-          scroller.scrollTop += Math.max(240, Math.floor(scroller.clientHeight * 0.8));
-          await grokSleep(500);
-          continue;
+      var failed = 0;
+      for (var i = 0; i < links.length; i++) {
+        var item = links[i];
+        grokSetOverlay("Deleting " + links.length + " conversations...", (i + 1) + " / " + links.length + " — " + item.title);
+        var ok = await grokApiDeleteConversation(item.id, i === 0);
+        if (ok) {
+          deleted++;
+        } else {
+          failed++;
         }
-
-        var item = items[0];
-        grokSetOverlay("Deleting Grok chats...", deleted + " deleted. Next: " + item.title);
-        var ok = await grokDeleteHistoryItem(item);
-        if (!ok) {
-          misses++;
-          if (misses >= 2) {
-            throw new Error("Could not find the delete control for history rows. Run Dump DOM (debug) with a row menu open so I can map the current UI.");
-          }
-          scroller.scrollTop += Math.max(160, Math.floor(scroller.clientHeight * 0.4));
-          await grokSleep(500);
-          continue;
-        }
-
-        deleted++;
-        misses = 0;
-        await grokSleep(900);
-        dialog = grokHistoryDialog();
-        if (!dialog) {
-          var reopen = document.querySelector('button[aria-label="Chat history"]');
-          if (reopen) reopen.click();
-          await grokSleep(900);
-          dialog = grokHistoryDialog();
-          if (!dialog) break;
-        }
-        scroller = grokHistoryScroller(dialog) || scroller;
+        await grokSleep(300);
       }
 
-      grokSetOverlay("Delete-all finished.", deleted + " chats deleted");
+      grokSetOverlay("Delete-all finished.", deleted + " deleted" + (failed ? ", " + failed + " failed" : ""));
     } catch (err) {
       grokSetOverlay("Delete-all stopped.", err && err.message ? err.message : String(err));
     } finally {

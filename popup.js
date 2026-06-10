@@ -551,6 +551,35 @@ document.getElementById("btn-grok-debug").addEventListener("click", function () 
     target: { tabId: currentTabId },
     func: function () {
       function txt(el) { return (el.innerText || el.textContent || "").trim(); }
+      function tagInfo(el, depth) {
+        var indent = "  " + "  ".repeat(depth);
+        var tag = el.tagName.toLowerCase();
+        var role = el.getAttribute("role") || "";
+        var testid = el.getAttribute("data-testid") || "";
+        var ariaLabel = el.getAttribute("aria-label") || "";
+        var href = el.getAttribute("href") || "";
+        var title = el.getAttribute("title") || "";
+        var rect = el.getBoundingClientRect();
+        var style = getComputedStyle(el);
+        var vis = style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 ? "VIS" : "HID";
+        var parts = [indent + "<" + tag];
+        if (role) parts.push('role="' + role + '"');
+        if (testid) parts.push('testid="' + testid + '"');
+        if (ariaLabel) parts.push('aria-label="' + ariaLabel.slice(0, 40) + '"');
+        if (href) parts.push('href="' + href.slice(0, 50) + '"');
+        if (title) parts.push('title="' + title.slice(0, 30) + '"');
+        parts.push("[" + vis + " " + Math.round(rect.width) + "x" + Math.round(rect.height) + "]");
+        var t = txt(el).replace(/\s+/g, " ").slice(0, 60);
+        if (t && t.length <= 60) parts.push('"' + t + '"');
+        return parts.join(" ");
+      }
+      function dumpTree(el, depth, maxDepth, lines) {
+        if (depth > maxDepth) return;
+        lines.push(tagInfo(el, depth));
+        for (var i = 0; i < el.children.length && i < 20; i++) {
+          dumpTree(el.children[i], depth + 1, maxDepth, lines);
+        }
+      }
       function collect() {
         var lines = [];
         lines.push("URL: " + location.href);
@@ -575,17 +604,27 @@ document.getElementById("btn-grok-debug").addEventListener("click", function () 
             if ((oy !== "auto" && oy !== "scroll") || el.scrollHeight <= el.clientHeight + 40) return;
             lines.push("  SCROLLER kids=" + el.childElementCount
               + " scrollH=" + el.scrollHeight + " clientH=" + el.clientHeight);
-            var rn = 0;
-            el.querySelectorAll('a[href],[role="link"],[role="button"]').forEach(function (row) {
-              if (rn >= 18) return;
-              var t = txt(row);
-              if (t.length < 2 || t.length > 70) return;
-              rn++;
-              lines.push("    <" + row.tagName.toLowerCase() + "> role=" + (row.getAttribute("role") || "-")
-                + " href=" + (row.getAttribute("href") || "-")
-                + " testid=" + (row.getAttribute("data-testid") || "-")
-                + " \"" + t.slice(0, 45).replace(/\s+/g, " ") + "\"");
-            });
+            var firstAnchor = el.querySelector('a[href*="conversation="]');
+            if (firstAnchor) {
+              var row = firstAnchor;
+              for (var n = row; n && n !== el; n = n.parentElement) {
+                var r = n.getBoundingClientRect();
+                if (r.width >= 180 && r.height >= 20 && r.height <= 120) row = n;
+              }
+              lines.push("  === FIRST ROW TREE (pre-hover) ===");
+              dumpTree(row, 0, 5, lines);
+              var moreBtn = row.querySelector('button[aria-label="More"]');
+              lines.push("  === MORE BUTTON: " + (moreBtn ? "FOUND" : "NOT FOUND") + " ===");
+              if (moreBtn) {
+                var anchor = moreBtn.closest('a[href]');
+                var saved = anchor ? anchor.getAttribute('href') : null;
+                if (saved) anchor.removeAttribute('href');
+                moreBtn.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, view: window }));
+                moreBtn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }));
+                moreBtn.click();
+                if (saved) setTimeout(function() { anchor.setAttribute('href', saved); }, 200);
+              }
+            }
           });
         });
         return lines.join("\n");
@@ -597,7 +636,43 @@ document.getElementById("btn-grok-debug").addEventListener("click", function () 
         var pre = "Chat history button: " + (hist ? "FOUND" : "NOT FOUND") + "\n";
         if (hist) hist.click();
         setTimeout(function () {
-          var out = pre + "after-click URL: " + location.href + " (was " + before + ")\n\n" + collect();
+          var mainDump = collect();
+          lines = mainDump.split("\n");
+          lines.push("");
+          lines.push("=== POST-MORE-CLICK (waiting 1s for menu) ===");
+          setTimeout(function () {
+            var addedLines = [];
+            document.querySelectorAll('[role="menu"],[role="listbox"],[role="menuitem"],[data-testid*="Dropdown"],[data-testid*="menu"]').forEach(function (m) {
+              addedLines.push("--- menu/listbox found ---");
+              dumpTree(m, 0, 5, addedLines);
+            });
+          var allBtns = Array.from(document.querySelectorAll('button,[role="button"]')).filter(function(b) {
+            var r = b.getBoundingClientRect();
+            return r.width > 0 && r.height > 0;
+          });
+          addedLines.push("--- all visible buttons (post-click) ---");
+          allBtns.forEach(function(b) {
+            addedLines.push(tagInfo(b, 0));
+          });
+          var allMenuItems = Array.from(document.querySelectorAll('[role="menuitem"],[role="option"]')).filter(function(b) {
+            var r = b.getBoundingClientRect();
+            return r.width > 0 && r.height > 0;
+          });
+          addedLines.push("--- all visible menu items (post-click) ---");
+          allMenuItems.forEach(function(b) {
+            addedLines.push(tagInfo(b, 0));
+          });
+          addedLines.push("--- all elements containing 'delete' or 'remove' text ---");
+          document.querySelectorAll('*').forEach(function(el) {
+            var t = txt(el);
+            if (/\b(delete|remove)\b/i.test(t)) {
+              var rect = el.getBoundingClientRect();
+              if (rect.width > 0 && rect.height > 0) {
+                addedLines.push(tagInfo(el, 0));
+              }
+            }
+          });
+          var out = pre + "after-click URL: " + location.href + " (was " + before + ")\n\n" + lines.concat(addedLines).join("\n");
           var blob = new Blob([out], { type: "text/plain" });
           var url = URL.createObjectURL(blob);
           var a = document.createElement("a");
@@ -605,6 +680,7 @@ document.getElementById("btn-grok-debug").addEventListener("click", function () 
           document.body.appendChild(a); a.click();
           document.body.removeChild(a); URL.revokeObjectURL(url);
           resolve(true);
+          }, 1000);
         }, 1300);
       });
     }
