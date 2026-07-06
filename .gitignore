@@ -5,7 +5,6 @@ node_modules/
 # --- agent/local context: never publish ---
 .claude/
 .opencode/
-AGENTS.md
 SESSION_NOTES.md
 HANDOFF*.md
 CONTINUATION_PROMPT.md
