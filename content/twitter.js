@@ -227,13 +227,18 @@
     });
   }
 
-  function waitForReplyTextarea() {
+  function waitForReplyTextarea(existingDialogs) {
     return new Promise(function (resolve) {
       var start = Date.now();
       (function check() {
-        var fields = Array.from(document.querySelectorAll('[data-testid="tweetTextarea_0"]'));
-        var visible = fields.filter(inlineReplyVisible).pop();
-        if (visible) return resolve(visible);
+        var dialogs = Array.from(document.querySelectorAll('[role="dialog"]')).filter(inlineReplyVisible);
+        var freshDialogs = dialogs.filter(function (dialog) { return existingDialogs.indexOf(dialog) === -1; });
+        var scope = freshDialogs.length ? freshDialogs : dialogs;
+        for (var i = scope.length - 1; i >= 0; i--) {
+          var fields = Array.from(scope[i].querySelectorAll('[data-testid="tweetTextarea_0"]'));
+          var visible = fields.filter(inlineReplyVisible).pop();
+          if (visible) return resolve(visible);
+        }
         if (Date.now() - start > 8000) return resolve(null);
         setTimeout(check, 100);
       })();
@@ -245,8 +250,16 @@
     var inserted = false;
     try { inserted = document.execCommand("insertText", false, text); } catch (e) {}
     if (!inserted || !textarea.textContent.trim()) {
-      textarea.textContent = text;
-      textarea.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
+      var selection = window.getSelection();
+      var range = document.createRange();
+      range.selectNodeContents(textarea);
+      range.collapse(false);
+      if (selection) { selection.removeAllRanges(); selection.addRange(range); }
+      try { inserted = document.execCommand("insertText", false, text); } catch (e) {}
+      if (!inserted || !textarea.textContent.trim()) {
+        textarea.textContent = text;
+        textarea.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
+      }
     }
   }
 
@@ -275,13 +288,15 @@
     if (!nativeReply) return;
     button.disabled = true;
     button.textContent = "Opening...";
+    var existingDialogs = Array.from(document.querySelectorAll('[role="dialog"]'));
     nativeReply.click();
-    var textarea = await waitForReplyTextarea();
+    var textarea = await waitForReplyTextarea(existingDialogs);
     if (!textarea) {
       button.disabled = false;
       button.textContent = "Reply";
       return;
     }
+    await new Promise(function (resolve) { setTimeout(resolve, 80); });
     fillReplyTextarea(textarea, text);
     button.textContent = "Replying...";
     var nativeSubmit = await waitForNativeReplyButton(textarea);
