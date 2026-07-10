@@ -38,7 +38,7 @@ export function providerOf(name) {
   return PROVIDERS[name] || PROVIDERS.deepseek;
 }
 
-export async function generatePosts({ account, count, settings, apiKey, signal, history, topic, length, focus }) {
+export async function generatePosts({ account, count, settings, apiKey, signal, history, topic, steerMode, length, focus }) {
   if (!apiKey) throw new Error("Add your API key in Settings to generate posts.");
   const examples = sampleExamples(voiceExamplesFrom(account), 12000);
   const voiceGuide = voiceGuideFrom(account);
@@ -50,7 +50,7 @@ export async function generatePosts({ account, count, settings, apiKey, signal, 
   const charLimit = length === "concise" ? 140 : 280;
   // Over-ask so the dedupe filter below can drop repeats and still fill the request.
   const ask = Math.min(12, count + 2);
-  const messages = buildMessages({ examples, voiceGuide, styleRefs, productContext, history, topic, count: ask, tone: settings.tone, mode: "generate", charLimit, focus: focusMode });
+  const messages = buildMessages({ examples, voiceGuide, styleRefs, productContext, history, topic, steerMode, count: ask, tone: settings.tone, mode: "generate", charLimit, focus: focusMode });
   const data = await call({ apiKey, settings, messages, temperature: 0.85, signal, json: true });
   const texts = parseArray(data).map((text) => clean(text, charLimit));
   // Last line of defense: drop anything that reproduces an example or history.
@@ -286,7 +286,7 @@ export async function testConnection({ settings, apiKey }) {
   return true;
 }
 
-function buildMessages({ examples, voiceGuide, styleRefs, productContext, history, topic, count, tone, mode, text, charLimit = 280, focus = "balanced" }) {
+function buildMessages({ examples, voiceGuide, styleRefs, productContext, history, topic, steerMode = "guidance", count, tone, mode, text, charLimit = 280, focus = "balanced" }) {
   const sys = [
     "You are a ghostwriter that matches an author's voice precisely.",
     "You write short social posts (max " + charLimit + " characters) that read like the author wrote them.",
@@ -326,7 +326,13 @@ function buildMessages({ examples, voiceGuide, styleRefs, productContext, histor
   parts.push("");
   if (focus === "voice") parts.push("Focus this batch on the author's own perspective, ideas, and voice. Do not make product-led posts.");
   if (focus === "product") parts.push("Focus every post on the product context: concrete value, audience problems, use cases, or the product-building journey. Keep the author's voice; do not invent claims.");
-  if (topic) parts.push("For this batch, write about: " + topic + ". Stay strictly within the voice.");
+  if (topic) {
+    if (steerMode === "specific") {
+      parts.push("BATCH DIRECTIVE - every post must directly satisfy this instruction: " + topic + ". Treat its requested angle, audience, constraints, claims, and calls to action as binding. Do not merely mention it or drift into adjacent topics.");
+    } else {
+      parts.push("BATCH GUIDANCE - use this as a creative direction, not wording to repeat verbatim: " + topic + ". Explore fitting angles in the author's voice while staying relevant to the guidance.");
+    }
+  }
   parts.push("Write " + count + " new original post" + (count === 1 ? "" : "s") + " in this voice. Each standalone, under " + charLimit + " characters, matching the voice" + (topic ? " and the requested topic" : " and topics above") + ".");
   parts.push('Return strict JSON: {"posts": ["…", "…"]} — an object whose "posts" key holds the post strings. No markdown fences, no commentary.');
   return [

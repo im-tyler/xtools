@@ -26,6 +26,7 @@ const uiState = {
   pullingOwn: false,
   learning: false,
   topic: "",
+  steerMode: "guidance",
   contextTab: "voice",
   productFetching: false,
 };
@@ -277,6 +278,7 @@ function viewFeed(state, acc) {
       <div class="gen-options">
         <div class="gen-option"><span>Length</span><div class="gen-segment">${choice("length", "concise", "Concise")}${choice("length", "standard", "Standard")}</div></div>
         <div class="gen-option"><span>Focus</span><div class="gen-segment">${choice("focus", "voice", "Voice")}${choice("focus", "balanced", "Balanced")}${choice("focus", "product", "Product", !hasProductContext)}</div></div>
+        <div class="gen-option"><span>Steer</span><div class="gen-segment"><button class="gen-choice ${uiState.steerMode === "specific" ? "" : "active"}" data-action="steer-mode" data-value="guidance">Guidance</button><button class="gen-choice ${uiState.steerMode === "specific" ? "active" : ""}" data-action="steer-mode" data-value="specific">Specific</button></div></div>
       </div>
     </div>`;
 
@@ -853,6 +855,7 @@ function onGlobalClick(e) {
     case "count-dec": updateSettings({ generateCount: Math.max(1, (getState().settings.generateCount || 5) - 1) }); break;
     case "gen-length": { const a = getActiveAccount(); if (a) { setAccountField(a.id, "generationLength", t.dataset.value === "concise" ? "concise" : "standard"); render(getState()); } break; }
     case "gen-focus": { const a = getActiveAccount(); if (a) { setAccountField(a.id, "generationFocus", ["voice", "balanced", "product"].includes(t.dataset.value) ? t.dataset.value : "balanced"); render(getState()); } break; }
+    case "steer-mode": uiState.steerMode = t.dataset.value === "specific" ? "specific" : "guidance"; render(getState()); break;
     case "post-now": doPostNow(id); break;
     case "remix": doRemix(id); break;
     case "queue": doQueue(id); break;
@@ -991,7 +994,7 @@ async function doGenerate() {
   uiState.genError = null;
   render(state);
   try {
-    const texts = await generatePosts({ account: acc, count: state.settings.generateCount, settings: state.settings, apiKey: state.apiKey, history: buildHistory(acc), topic: (uiState.topic || "").trim(), length: acc.generationLength, focus: acc.generationFocus });
+    const texts = await generatePosts({ account: acc, count: state.settings.generateCount, settings: state.settings, apiKey: state.apiKey, history: buildHistory(acc), topic: (uiState.topic || "").trim(), steerMode: uiState.steerMode, length: acc.generationLength, focus: acc.generationFocus });
     if (!texts.length) { uiState.genError = "Nothing new came back — the model may be repeating existing posts. Try again."; toast(uiState.genError, "warn"); }
     else { addPosts(acc.id, texts); toast("Generated " + texts.length + " post" + (texts.length === 1 ? "" : "s"), "ok"); }
   } catch (err) {
