@@ -40,7 +40,7 @@ export function providerOf(name) {
 
 export async function generatePosts({ account, count, settings, apiKey, signal, history, topic }) {
   if (!apiKey) throw new Error("Add your API key in Settings to generate posts.");
-  const examples = sampleExamples((account && account.context ? account.context : "").trim(), 12000);
+  const examples = sampleExamples(voiceExamplesFrom(account), 12000);
   const voiceGuide = voiceGuideFrom(account);
   const styleRefs = account && account.museInGeneration ? museBlocks(account, 5, 3).join("\n\n") : "";
   const productContext = productContextFrom(account);
@@ -69,7 +69,7 @@ function dedupeAgainst(texts, knowns) {
 
 export async function remixPost({ text, account, settings, apiKey, signal, history }) {
   if (!apiKey) throw new Error("Add your API key in Settings to remix.");
-  const examples = sampleExamples(((account && account.context) || "").trim(), 12000);
+  const examples = sampleExamples(voiceExamplesFrom(account), 12000);
   const messages = buildMessages({
     text,
     examples,
@@ -97,7 +97,7 @@ export async function previewPost({ account, settings, apiKey, signal }) {
 
 export async function generateProfile({ account, settings, apiKey, signal }) {
   if (!apiKey) throw new Error("Add your API key in Settings first.");
-  const examples = ((account && account.context) || "").trim();
+  const examples = voiceExamplesFrom(account);
   const museRefs = museBlocks(account, 15, 8).join("\n\n");
   const refs = [((account && account.references) || "").trim(), museRefs].filter(Boolean).join("\n\n");
   const pillars = ((account && account.pillars) || "").trim();
@@ -208,6 +208,12 @@ function voiceGuideFrom(account) {
     .join("\n");
   if (learned) out += (out ? "\n\n" : "") + "Preferences learned from what the author actually posts, edits, and rejects:\n" + learned;
   return out.trim();
+}
+
+function voiceExamplesFrom(account) {
+  const personal = ((account && account.context) || "").trim();
+  const pulled = ((account && account.ownPosts) || []).map((post) => String(post || "").trim()).filter(Boolean).join("\n\n");
+  return [personal, pulled].filter(Boolean).join("\n\n");
 }
 
 /* Product context is factual grounding, never voice material. Keep it bounded

@@ -472,11 +472,17 @@ function viewProductContext(acc) {
   const sources = acc.productSources || [];
   const sourceRows = sources.length
     ? `<div class="product-sources">${sources.map((source, index) => `<div class="product-source">
-        <div class="product-source-copy">
-          <strong>${escapeText(source.title || source.url)}</strong>
-          <span>${escapeText(source.url)} · ${source.text ? source.text.length.toLocaleString() + " characters" : "no text"}</span>
+        <div class="product-source-head">
+          <div class="product-source-copy">
+            <strong>${escapeText(source.title || source.url)}</strong>
+            <span>${escapeText(source.url)} · ${source.text ? source.text.length.toLocaleString() + " characters" : "no text"}</span>
+          </div>
+          <div class="product-source-actions">
+            <button class="btn-ghost sm" data-action="refresh-product-source" data-id="${index}" ${uiState.productFetching ? "disabled" : ""}>${ic.remix(14)}<span>${uiState.productFetching ? "Reading…" : "Refresh"}</span></button>
+            <button class="btn-icon danger" data-action="remove-product-source" data-id="${index}" title="Remove source">${ic.trash(16)}</button>
+          </div>
         </div>
-        <button class="btn-icon danger" data-action="remove-product-source" data-id="${index}" title="Remove source">${ic.trash(16)}</button>
+        <textarea class="voice-area sm product-source-text" data-role="product-source-text" data-id="${index}" aria-label="Context from ${escapeAttr(source.title || source.url)}">${escapeText(source.text || "")}</textarea>
       </div>`).join("")}</div>`
     : `<span class="meta">No product pages yet. Add a homepage, pricing page, documentation, or product page to ground generated posts in real details.</span>`;
   return `<section class="panel">
@@ -553,7 +559,7 @@ function musesHtml(acc) {
       </label>`
     : "";
   return `<div class="field">
-    <span class="field-label">Additional voice context — up to ${MAX_MUSES} X accounts</span>
+    <span class="field-label">X accounts to emulate — up to ${MAX_MUSES}</span>
     ${chips ? `<div class="muses">${chips}</div>` : ""}
     ${addRow}
     <span class="field-hint">AI Post Studio opens their profile in a background tab and collects recent posts + replies as "voices to emulate" for the profile. You must be logged into x.com.</span>
@@ -853,6 +859,7 @@ function onGlobalClick(e) {
     case "collect-muse": doCollectMuse(t.dataset.handle); break;
     case "remove-muse": { const a = getActiveAccount(); if (a) removeMuse(a.id, t.dataset.handle); break; }
     case "add-product-source": doAddProductSource(); break;
+    case "refresh-product-source": doRefreshProductSource(+id); break;
     case "remove-product-source": removeProductSource(+id); break;
     default: break;
   }
@@ -864,6 +871,10 @@ function onGlobalInput(e) {
   const fieldMap = { voiceExamples: "context", voiceRefs: "references", voicePillars: "pillars", productContext: "productContext" };
   if (acc && fieldMap[t.id]) {
     setAccountField(acc.id, fieldMap[t.id], t.value);
+    flashSaved();
+  }
+  if (acc && t.dataset.role === "product-source-text") {
+    updateProductSourceText(acc, +t.dataset.id, t.value);
     flashSaved();
   }
   if (acc && t.id === "profileSummary") {
@@ -1130,11 +1141,8 @@ async function doAddProductSource() {
   const acc = getActiveAccount();
   const input = document.getElementById("productSourceUrl");
   if (!acc || !input || !input.value.trim() || uiState.productFetching) return;
-  let url = input.value.trim();
-  if (!/^https?:\/\//i.test(url)) url = "https://" + url;
   try {
-    const parsed = new URL(url);
-    if (!/^https?:$/.test(parsed.protocol)) throw new Error("Use an http or https URL.");
+    const parsed = productSourceUrl(input.value);
     if ((acc.productSources || []).some((source) => source.url === parsed.href)) {
       toast("That page is already included", "warn");
       return;
@@ -1143,26 +1151,8 @@ async function doAddProductSource() {
     if (!granted) throw new Error("Permission is required to read that product page.");
     uiState.productFetching = true;
     render(getState());
-    const response = await fetch(parsed.href, { redirect: "follow" });
-    if (!response.ok) throw new Error("Page returned " + response.status + ".");
-    const html = await response.text();
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    const title = (doc.querySelector("meta[property='og:title']") || {}).content || doc.title || new URL(response.url).hostname;
-    const description = [
-      (doc.querySelector("meta[name='description']") || {}).content,
-      (doc.querySelector("meta[property='og:description']") || {}).content,
-    ].filter(Boolean).join(" ");
-    const structured = Array.from(doc.querySelectorAll("script[type='application/ld+json']"))
-      .map((el) => el.textContent || "")
-      .join(" ");
-    doc.querySelectorAll("script,style,noscript,svg,nav,footer,form,button").forEach((el) => el.remove());
-    const pageText = [doc.querySelector("main"), doc.querySelector("article"), doc.querySelector("[role=main]"), doc.body]
-      .filter(Boolean)
-      .map((el) => (el.textContent || "").replace(/\s+/g, " ").trim())
-      .sort((a, b) => b.length - a.length)[0] || "";
-    const text = [title, description, structured, pageText].filter(Boolean).join("\n\n").slice(0, 12000);
-    if (text.length < 80) throw new Error("Could not read enough product text from that page.");
-    const sources = (acc.productSources || []).concat({ url: response.url, title: title.trim().slice(0, 180), text, fetchedAt: Date.now() });
+    const source = await fetchProductSource(parsed.href);
+    const sources = (acc.productSources || []).concat(source);
     setAccountField(acc.id, "productSources", sources.slice(-6));
     toast("Added product page context", "ok");
   } catch (e) {
@@ -1171,6 +1161,66 @@ async function doAddProductSource() {
     uiState.productFetching = false;
     render(getState());
   }
+}
+
+async function doRefreshProductSource(index) {
+  const acc = getActiveAccount();
+  const source = acc && (acc.productSources || [])[index];
+  if (!acc || !source || uiState.productFetching) return;
+  try {
+    const granted = await requestOriginPermission(source.url);
+    if (!granted) throw new Error("Permission is required to refresh that product page.");
+    uiState.productFetching = true;
+    render(getState());
+    const refreshed = await fetchProductSource(source.url);
+    const sources = (acc.productSources || []).slice();
+    sources[index] = refreshed;
+    setAccountField(acc.id, "productSources", sources);
+    toast("Product page context refreshed", "ok");
+  } catch (e) {
+    toast((e && e.message) || "Could not refresh that product page", "error");
+  } finally {
+    uiState.productFetching = false;
+    render(getState());
+  }
+}
+
+function productSourceUrl(value) {
+  let url = String(value || "").trim();
+  if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+  const parsed = new URL(url);
+  if (!/^https?:$/.test(parsed.protocol)) throw new Error("Use an http or https URL.");
+  return parsed;
+}
+
+async function fetchProductSource(url) {
+  const response = await fetch(url, { redirect: "follow" });
+  if (!response.ok) throw new Error("Page returned " + response.status + ".");
+  const html = await response.text();
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const title = (doc.querySelector("meta[property='og:title']") || {}).content || doc.title || new URL(response.url).hostname;
+  const description = [
+    (doc.querySelector("meta[name='description']") || {}).content,
+    (doc.querySelector("meta[property='og:description']") || {}).content,
+  ].filter(Boolean).join(" ");
+  const structured = Array.from(doc.querySelectorAll("script[type='application/ld+json']"))
+    .map((el) => el.textContent || "")
+    .join(" ");
+  doc.querySelectorAll("script,style,noscript,svg,nav,footer,form,button").forEach((el) => el.remove());
+  const pageText = [doc.querySelector("main"), doc.querySelector("article"), doc.querySelector("[role=main]"), doc.body]
+    .filter(Boolean)
+    .map((el) => (el.textContent || "").replace(/\s+/g, " ").trim())
+    .sort((a, b) => b.length - a.length)[0] || "";
+  const text = [title, description, structured, pageText].filter(Boolean).join("\n\n").slice(0, 12000);
+  if (text.length < 80) throw new Error("Could not read enough product text from that page.");
+  return { url: response.url, title: title.trim().slice(0, 180), text, fetchedAt: Date.now() };
+}
+
+function updateProductSourceText(acc, index, text) {
+  if (!Number.isInteger(index) || !(acc.productSources || [])[index]) return;
+  const sources = (acc.productSources || []).slice();
+  sources[index] = { ...sources[index], text };
+  setAccountField(acc.id, "productSources", sources);
 }
 
 function removeProductSource(index) {

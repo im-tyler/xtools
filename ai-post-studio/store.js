@@ -13,6 +13,7 @@ const state = {
 
 const listeners = new Set();
 let selfWrite = false;
+let selfWriteTimer = null;
 
 export function defaultSettings() {
   return {
@@ -81,6 +82,7 @@ export function accountLog(accountId) {
 
 async function persist() {
   selfWrite = true;
+  clearTimeout(selfWriteTimer);
   try {
     await chrome.storage.local.set({
       accounts: state.accounts,
@@ -90,7 +92,10 @@ async function persist() {
       activeAccountId: state.activeAccountId,
     });
   } finally {
-    setTimeout(() => { selfWrite = false; }, 60);
+    // Chrome can deliver local storage echoes after set() resolves. Keep this
+    // guard through a quiet period so typing does not rebuild and blur inputs.
+    clearTimeout(selfWriteTimer);
+    selfWriteTimer = setTimeout(() => { selfWrite = false; }, 500);
   }
 }
 
@@ -271,11 +276,11 @@ export async function applyPendingScrapes() {
     if (!a) continue;
     if (s.kind === "own") {
       const items = [].concat(s.tweets || [], s.replies || []);
-      const existing = (a.context || "").trim();
-      const seen = new Set(existing ? existing.split(/\n\n+/).map((x) => x.trim()) : []);
+      const existing = Array.isArray(a.ownPosts) ? a.ownPosts : [];
+      const seen = new Set(existing.map((x) => x.trim()));
       const fresh = items.filter((t) => t.trim() && !seen.has(t.trim()));
       if (fresh.length) {
-        a.context = [existing].concat(fresh).filter(Boolean).join("\n\n");
+        a.ownPosts = existing.concat(fresh);
         applied += fresh.length;
         changed = true;
       }

@@ -189,10 +189,13 @@ a:hover { text-decoration: underline; }
 .panel-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .panel-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 10px; }
 .product-sources { display: flex; flex-direction: column; gap: 7px; }
-.product-source { display: flex; align-items: center; gap: 10px; padding: 10px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.product-source { display: flex; flex-direction: column; gap: 9px; padding: 10px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.product-source-head { width: 100%; display: flex; align-items: center; gap: 10px; }
 .product-source-copy { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 2px; }
 .product-source-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-dim); }
 .product-source-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--text-faint); }
+.product-source-actions { display: flex; align-items: center; gap: 6px; }
+.product-source-text { min-height: 120px; }
 
 h2 { margin: 0; }
 .muted { color: var(--text-faint); margin: 4px 0 0; font-size: 13px; }
