@@ -208,7 +208,11 @@
       return;
     }
     document.querySelectorAll('[data-xtools-inline-reply]').forEach(function (composer) {
-      if (!composer._xtoolsTweet || !composer._xtoolsTweet.isConnected) composer.remove();
+      var tweet = composer._xtoolsTweet;
+      if (!tweet || !tweet.isConnected || isFocalTweet(tweet)) {
+        if (tweet) delete tweet.dataset.xtoolsInlineReplyAttached;
+        composer.remove();
+      }
     });
     document.querySelectorAll('article[data-testid="tweet"]').forEach(function (tweet) {
       if (tweet.dataset.xtoolsInlineReplyAttached) return;
@@ -445,6 +449,7 @@
     if (location.href === _lastUrl) return;
     _lastUrl = location.href;
     applyCSS(currentSettings);
+    injectInlineReplyComposers();
   }
 
   var _origPushState = history.pushState;
