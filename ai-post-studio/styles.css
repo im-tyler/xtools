@@ -588,12 +588,10 @@ select.input { cursor: pointer; appearance: none; background-image: linear-gradi
   gap: 12px;
   animation: cardIn .3s var(--spring) both;
 }
-.ob-brand { display: flex; justify-content: center; margin-bottom: 4px; }
 .ob-card h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
 .ob-card h2 { font-size: 18px; margin: 0; }
 .ob-sub { color: var(--text-faint); margin: 0 0 4px; font-size: 13.5px; line-height: 1.55; }
 .ob-card .field { text-align: left; }
-.ob-cta { align-self: center; padding: 11px 24px; margin-top: 8px; }
 .ob-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
 .ob-actions .btn-primary { margin-left: auto; }
 .ob-dots { display: flex; justify-content: center; gap: 6px; margin-top: 12px; }

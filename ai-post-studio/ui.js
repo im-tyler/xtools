@@ -64,7 +64,6 @@ function onboardingHtml(state) {
   return `<div class="ob">
     <button class="ob-theme btn-icon" data-action="toggle-theme" title="Toggle theme">${themeIcon}</button>
     <div class="ob-card">
-      <div class="ob-brand">${ic.logo(36)}</div>
       ${obStepHtml(step, state)}
       <div class="ob-dots">${[0, 1, 2, 3].map((i) => `<span class="dot-s ${i === step ? "active" : ""}"></span>`).join("")}</div>
     </div>
@@ -77,8 +76,11 @@ function obStepHtml(step, state) {
   if (step === 0) {
     return `
       <h1>AI Post Studio for X</h1>
-      <p class="ob-sub">Build a voice, generate on-brand posts, and post or queue them — without a $100/mo API. Takes about a minute.</p>
-      <button class="btn-primary ob-cta" data-action="ob-next">Get started</button>`;
+      <p class="ob-sub">Build a voice, generate on-brand posts, and post or queue them without an X API. Set it up now, or start with the basics and configure it whenever you are ready.</p>
+      <div class="ob-actions">
+        <button class="btn-ghost" data-action="ob-later">Set up later</button>
+        <button class="btn-primary" data-action="ob-next">Set up now</button>
+      </div>`;
   }
   if (step === 1) {
     return `
@@ -87,6 +89,7 @@ function obStepHtml(step, state) {
       <input class="input" id="ob-name" value="${escapeAttr((acc && acc.name) || "My account")}">
       <div class="ob-actions">
         <button class="btn-ghost" data-action="ob-back">Back</button>
+        <button class="btn-ghost" data-action="ob-later">Set up later</button>
         <button class="btn-primary" data-action="ob-next">Continue</button>
       </div>`;
   }
@@ -104,6 +107,7 @@ function obStepHtml(step, state) {
       </label>
       <div class="ob-actions">
         <button class="btn-ghost" data-action="ob-back">Back</button>
+        <button class="btn-ghost" data-action="ob-later">Set up later</button>
         <button class="btn-ghost" id="ob-test-btn" data-action="ob-test">Test connection</button>
         <button class="btn-primary" data-action="ob-next">Continue</button>
       </div>`;
@@ -115,7 +119,7 @@ function obStepHtml(step, state) {
     <textarea class="voice-area" id="ob-voice" placeholder="Paste example posts, separated by a blank line…">${escapeText(ctx)}</textarea>
     <div class="ob-actions">
       <button class="btn-ghost" data-action="ob-back">Back</button>
-      <button class="btn-ghost" data-action="ob-skip">Set up later</button>
+      <button class="btn-ghost" data-action="ob-later">Set up later</button>
       <button class="btn-primary" data-action="ob-next">Open Voice studio</button>
     </div>`;
 }
@@ -765,7 +769,7 @@ function onGlobalClick(e) {
     case "toggle-theme": setTheme(getState().settings.theme === "light" ? "dark" : "light"); break;
     case "ob-next": obNext(); break;
     case "ob-back": uiState.obStep = Math.max(0, (uiState.obStep || 0) - 1); render(getState()); break;
-    case "ob-skip": obFinish(null); break;
+    case "ob-later": obFinish(null, "feed"); break;
     case "ob-test": obTest(); break;
     case "test-connection": doTestConnection(); break;
     case "generate-profile": doGenerateProfile(); break;
@@ -1067,11 +1071,11 @@ function obNext() {
   render(getState());
 }
 
-function obFinish(voice) {
+function obFinish(voice, view = "voice") {
   const acc = getActiveAccount();
   if (acc && voice != null) persistContext(acc.id, voice);
   uiState.obStep = 0;
-  completeOnboarding("voice");
+  completeOnboarding(view);
 }
 
 async function obTest() {
