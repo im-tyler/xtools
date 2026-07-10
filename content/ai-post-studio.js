@@ -208,10 +208,17 @@
   }
 
   function authorOf(article) {
-    const link = article.querySelector('[data-testid="User-Name"] a[href^="/"]');
-    if (!link) return "";
-    const m = (link.getAttribute("href") || "").match(/^\/([A-Za-z0-9_]{1,20})/);
-    return m ? m[1].toLowerCase() : "";
+    const userName = article.querySelector('[data-testid="User-Name"]');
+    if (!userName) return "";
+    const links = userName.querySelectorAll('a[href^="/"]');
+    for (const link of links) {
+      const m = (link.getAttribute("href") || "").match(/^\/([A-Za-z0-9_]{1,20})(?:\/|$)/);
+      if (m) return m[1].toLowerCase();
+    }
+    // X occasionally omits the profile anchor while a timeline is hydrating.
+    const text = userName.textContent || "";
+    const match = text.match(/@([A-Za-z0-9_]{1,20})/);
+    return match ? match[1].toLowerCase() : "";
   }
 
   /* On a profile page: the avatar URL for `handle` (testid suffix is the

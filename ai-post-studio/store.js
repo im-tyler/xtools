@@ -296,7 +296,15 @@ export async function applyPendingScrapes() {
       const m = (a.muses || []).find((x) => x.handle.toLowerCase() === String(s.handle).toLowerCase());
       if (!m) continue;
       // A refresh that came back empty (logged out, DOM change) keeps old data.
-      if (!(s.tweets || []).length && !(s.replies || []).length) continue;
+      if (!(s.tweets || []).length && !(s.replies || []).length) {
+        if (!m.fetchedAt) {
+          m.tweets = [];
+          m.replies = [];
+          m.fetchedAt = s.at || Date.now();
+          changed = true;
+        }
+        continue;
+      }
       m.tweets = s.tweets || [];
       m.replies = s.replies || [];
       delete m.context;

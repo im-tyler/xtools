@@ -227,12 +227,18 @@ async function scrapeMuse(msg) {
 async function scrapeInTab(tabId, handle, pathSubstr, limit) {
   await waitForTabNav(tabId, pathSubstr);
   await sleep(2000); // SPA hydration after document complete
-  const res = await chrome.tabs
-    .sendMessage(tabId, { type: "SCRAPE_PROFILE", handle, limit })
-    .catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
-  return res && res.ok
-    ? { items: res.items || [], error: "" }
-    : { items: [], error: (res && res.error) || "content_script_unreachable" };
+  let error = "content_script_unreachable";
+  // A newly opened inactive X tab can report complete before the extension
+  // content script is registered. Retry its first message through hydration.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const res = await chrome.tabs
+      .sendMessage(tabId, { type: "SCRAPE_PROFILE", handle, limit })
+      .catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
+    if (res && res.ok) return { items: res.items || [], error: "" };
+    error = (res && res.error) || error;
+    await sleep(800);
+  }
+  return { items: [], error };
 }
 
 /* Grab an account's profile picture URL from its profile page. */
