@@ -180,6 +180,10 @@ function museBlocks(account, tweetsPer, repliesPer) {
   const muses = (account && account.muses) || [];
   const out = [];
   muses.forEach((m) => {
+    if (typeof m.context === "string" && m.context.trim()) {
+      out.push("@" + m.handle + ":\n" + trimChunks(m.context.trim(), 6000));
+      return;
+    }
     const tweets = (m.tweets || []).slice(0, tweetsPer);
     const replies = (m.replies || []).slice(0, repliesPer);
     if (!tweets.length && !replies.length) return;

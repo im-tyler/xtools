@@ -196,6 +196,10 @@ a:hover { text-decoration: underline; }
 .product-source-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--text-faint); }
 .product-source-actions { display: flex; align-items: center; gap: 6px; }
 .product-source-text { min-height: 120px; }
+.muse-head { display: flex; align-items: center; gap: 8px; }
+.muse-context { border-top: 1px solid var(--border); padding-top: 8px; }
+.muse-context summary { color: var(--text-faint); cursor: pointer; font-size: 11px; margin-bottom: 8px; }
+.muse-context[open] summary { color: var(--text-dim); }
 
 h2 { margin: 0; }
 .muted { color: var(--text-faint); margin: 4px 0 0; font-size: 13px; }
@@ -522,8 +526,8 @@ select.input { cursor: pointer; appearance: none; background-image: linear-gradi
 
 .muses { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
 .muse {
-  display: flex; align-items: center; gap: 10px;
-  padding: 7px 10px;
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+  padding: 10px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface-2);

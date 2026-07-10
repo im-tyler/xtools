@@ -239,6 +239,14 @@ export function removeMuse(accountId, handle) {
   notify();
 }
 
+export function setMuseContext(accountId, handle, context) {
+  const a = findAccount(accountId);
+  const muse = a && (a.muses || []).find((m) => m.handle.toLowerCase() === String(handle).toLowerCase());
+  if (!muse) return;
+  muse.context = context;
+  persist();
+}
+
 /* Scrape the account's own linked @handle (tweets + replies) into the "Your
  * posts" voice examples, deduped against what's already there. */
 export async function collectOwnPosts(accountId) {
@@ -291,6 +299,7 @@ export async function applyPendingScrapes() {
       if (!(s.tweets || []).length && !(s.replies || []).length) continue;
       m.tweets = s.tweets || [];
       m.replies = s.replies || [];
+      delete m.context;
       m.fetchedAt = s.at || Date.now();
       applied += m.tweets.length + m.replies.length;
       changed = true;

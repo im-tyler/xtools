@@ -5,7 +5,7 @@ import {
   applyTheme, setTheme, completeOnboarding, setAccountField, setProfile,
   setProfileSummarySilent, toggleTrait, setTraitText, removeTrait, addTrait,
   confirmProfile, addMuse, removeMuse, collectMuse, MAX_MUSES, setAccountHandle,
-  collectOwnPosts, accountLog, logEdit, setLearnedTraits, clearLearnedTraits,
+  collectOwnPosts, accountLog, logEdit, setLearnedTraits, clearLearnedTraits, setMuseContext,
 } from "./store.js";
 import { generatePosts, remixPost, testConnection, previewPost, generateProfile, learnPreferences, getProviders, providerOf } from "./ai.js";
 import { fmtTime, fmtRelative, linkify } from "./util.js";
@@ -538,11 +538,15 @@ function musesHtml(acc) {
     const n = (m.tweets || []).length + (m.replies || []).length;
     const busy = uiState.collectingMuse === m.handle;
     const meta = busy ? "collecting…" : m.fetchedAt ? n + " collected · " + fmtRelative(m.fetchedAt) : "not collected yet";
+    const snapshot = museSnapshot(m);
     return `<div class="muse ${busy ? "busy" : ""}">
-      <span class="muse-handle">@${escapeText(m.handle)}</span>
-      <span class="muse-meta">${escapeText(meta)}</span>
-      <button class="btn-icon" data-action="collect-muse" data-handle="${escapeAttr(m.handle)}" title="${m.fetchedAt ? "Refresh" : "Collect"} posts & replies" ${scrapeBusy() ? "disabled" : ""}>${busy ? ic.clock(16) : ic.remix(16)}</button>
-      <button class="btn-icon danger" data-action="remove-muse" data-handle="${escapeAttr(m.handle)}" title="Remove" ${busy ? "disabled" : ""}>${ic.trash(16)}</button>
+      <div class="muse-head">
+        <span class="muse-handle">@${escapeText(m.handle)}</span>
+        <span class="muse-meta">${escapeText(meta)}</span>
+        <button class="btn-icon" data-action="collect-muse" data-handle="${escapeAttr(m.handle)}" title="${m.fetchedAt ? "Refresh" : "Collect"} posts & replies" ${scrapeBusy() ? "disabled" : ""}>${busy ? ic.clock(16) : ic.remix(16)}</button>
+        <button class="btn-icon danger" data-action="remove-muse" data-handle="${escapeAttr(m.handle)}" title="Remove" ${busy ? "disabled" : ""}>${ic.trash(16)}</button>
+      </div>
+      ${snapshot ? `<details class="muse-context"><summary>View and edit collected context</summary><textarea class="voice-area sm" data-role="muse-context" data-handle="${escapeAttr(m.handle)}" aria-label="Context from @${escapeAttr(m.handle)}">${escapeText(snapshot)}</textarea></details>` : ""}
     </div>`;
   }).join("");
   const addRow = muses.length < MAX_MUSES
@@ -551,7 +555,7 @@ function musesHtml(acc) {
         <button class="btn-ghost sm" data-action="add-muse">${ic.plus(16)}<span>Add</span></button>
       </div>`
     : "";
-  const hasContent = muses.some((m) => (m.tweets || []).length || (m.replies || []).length);
+  const hasContent = muses.some((m) => museSnapshot(m));
   const toggle = hasContent
     ? `<label class="check">
         <input type="checkbox" data-role="muse-gen" ${acc.museInGeneration ? "checked" : ""}>
@@ -565,6 +569,13 @@ function musesHtml(acc) {
     <span class="field-hint">AI Post Studio opens their profile in a background tab and collects recent posts + replies as "voices to emulate" for the profile. You must be logged into x.com.</span>
     ${toggle}
   </div>`;
+}
+
+function museSnapshot(muse) {
+  if (typeof muse.context === "string") return muse.context;
+  const posts = (muse.tweets || []).filter(Boolean).join("\n\n");
+  const replies = (muse.replies || []).filter(Boolean).join("\n\n");
+  return [posts ? "Posts:\n" + posts : "", replies ? "Replies:\n" + replies : ""].filter(Boolean).join("\n\n");
 }
 
 function voiceRichness(ex) {
@@ -875,6 +886,10 @@ function onGlobalInput(e) {
   }
   if (acc && t.dataset.role === "product-source-text") {
     updateProductSourceText(acc, +t.dataset.id, t.value);
+    flashSaved();
+  }
+  if (acc && t.dataset.role === "muse-context") {
+    setMuseContext(acc.id, t.dataset.handle, t.value);
     flashSaved();
   }
   if (acc && t.id === "profileSummary") {
