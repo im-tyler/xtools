@@ -420,9 +420,10 @@ function viewContext(state, acc) {
 function viewVoice(state, acc) {
   if (!acc) return "";
   const examples = acc.context || "";
+  const ownPosts = (acc.ownPosts || []).join("\n\n");
   const refs = acc.references || "";
   const pillars = acc.pillars || "";
-  const rich = voiceRichness(examples);
+  const rich = voiceRichness([examples, ownPosts].filter(Boolean).join("\n\n"));
 
   const sources = `
     <section class="panel">
@@ -432,17 +433,21 @@ function viewVoice(state, acc) {
       </div>
       <div class="panel-body">
         <label class="field">
+          <span class="field-label">Personal notes and examples</span>
+          <textarea class="voice-area sm" id="voiceExamples" placeholder="Paste your own writing, positioning notes, or themes, separated by blank lines…">${escapeText(examples)}</textarea>
+        </label>
+        <label class="field">
           <div class="field-row">
-            <span class="field-label">Your posts</span>
+            <span class="field-label">Posts from your X account</span>
             <button class="btn-ghost sm" data-action="pull-own" ${scrapeBusy() ? "disabled" : ""}>
               ${ic.remix(14)}<span>${uiState.pullingOwn ? "Collecting…" : acc.handle ? "Pull from @" + escapeText(acc.handle) : "Pull from your @handle"}</span>
             </button>
           </div>
-          <textarea class="voice-area" id="voiceExamples" placeholder="Paste 3–10 of your own posts, separated by a blank line — or pull them from your linked @handle…">${escapeText(examples)}</textarea>
+          <textarea class="voice-area" id="ownPostsContext" placeholder="Link your X handle in Settings, then pull posts here. You can edit the saved snapshot directly.">${escapeText(ownPosts)}</textarea>
         </label>
         <div class="grid2">
           <label class="field">
-            <span class="field-label">Voices to emulate</span>
+            <span class="field-label">Writing references to emulate</span>
             <textarea class="voice-area sm" id="voiceRefs" placeholder="Paste writing you like, or describe a style — e.g. 'concise and aphoristic like @naval'">${escapeText(refs)}</textarea>
           </label>
           <label class="field">
@@ -882,6 +887,10 @@ function onGlobalInput(e) {
   const fieldMap = { voiceExamples: "context", voiceRefs: "references", voicePillars: "pillars", productContext: "productContext" };
   if (acc && fieldMap[t.id]) {
     setAccountField(acc.id, fieldMap[t.id], t.value);
+    flashSaved();
+  }
+  if (acc && t.id === "ownPostsContext") {
+    setAccountField(acc.id, "ownPosts", t.value.split(/\n\n+/).map((post) => post.trim()).filter(Boolean));
     flashSaved();
   }
   if (acc && t.dataset.role === "product-source-text") {
