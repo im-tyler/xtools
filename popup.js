@@ -2,22 +2,47 @@ var currentTabId = null;
 
 function refreshAiPostStudioStats() {
   var stats = document.getElementById("ai-post-studio-stats");
+  var accountEl = document.getElementById("ai-post-studio-account");
+  var keyEl = document.getElementById("ai-post-studio-key");
   if (!stats) return;
-  chrome.storage.local.get({ posts: [] }, function (data) {
+  chrome.storage.local.get({ posts: [], accounts: [], activeAccountId: "", apiKey: "" }, function (data) {
     var posts = Array.isArray(data.posts) ? data.posts : [];
-    var drafts = posts.filter(function (post) { return post.status === "draft"; }).length;
+    var accounts = Array.isArray(data.accounts) ? data.accounts : [];
+    var active = accounts.filter(function (account) { return account.id === data.activeAccountId; })[0] || accounts[0];
+    var drafts = posts.filter(function (post) { return post.status === "draft" && (!active || post.accountId === active.id); }).length;
     var queued = posts.filter(function (post) { return post.status === "queued"; }).length;
     stats.textContent = drafts + " draft" + (drafts === 1 ? "" : "s") + " ready · " + queued + " queued";
+    if (accountEl) accountEl.textContent = active ? active.name || "Account" : "No account";
+    if (keyEl) keyEl.textContent = data.apiKey ? "Key set" : "No key";
   });
 }
 
-document.getElementById("btn-ai-post-studio").addEventListener("click", function () {
+function openAiPostStudio() {
+  function openTab() {
+    chrome.tabs.create({ url: chrome.runtime.getURL("ai-post-studio/index.html") });
+    window.close();
+  }
+  if (!chrome.sidePanel) {
+    openTab();
+    return;
+  }
+  chrome.windows.getCurrent().then(function (win) {
+    return chrome.sidePanel.open({ windowId: win.id });
+  }).then(function () {
+    window.close();
+  }).catch(openTab);
+}
+
+document.getElementById("btn-ai-post-studio").addEventListener("click", openAiPostStudio);
+
+document.getElementById("btn-ai-post-studio-tab").addEventListener("click", function (event) {
+  event.stopPropagation();
   chrome.tabs.create({ url: chrome.runtime.getURL("ai-post-studio/index.html") });
   window.close();
 });
 
 chrome.storage.onChanged.addListener(function (changes, area) {
-  if (area === "local" && changes.posts) refreshAiPostStudioStats();
+  if (area === "local" && (changes.posts || changes.accounts || changes.activeAccountId || changes.apiKey)) refreshAiPostStudioStats();
 });
 
 refreshAiPostStudioStats();
