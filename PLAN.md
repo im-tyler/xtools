@@ -2,14 +2,15 @@
 
 ## What this is
 
-A Manifest V3 Chrome extension bundling three tools: **Full Page Screenshot** (any site), **Grok Export** (Markdown/HTML), and **Clean X** (distraction-free X/Twitter). One extension, three features, MV3-clean.
+A Manifest V3 Chrome extension bundling four tools: **Full Page Screenshot** (any site), **Grok Export** (Markdown/HTML), **Clean X** (distraction-free X/Twitter), and **AI Post Studio** (voice-guided X posting). One extension, four features, MV3-clean.
 
 ## Current state
 
-**Beta.** All three features work:
+**Beta.** All four features work:
 - Full Page Screenshot: scrolls, captures, stitches, with progress UI
 - Grok Export: scan + download queue + "delete all chats" action; Markdown or HTML
 - Clean X: toggleable hides for suggested content, sidebar, trending, who-to-follow, metrics, Grok/Jobs/Communities/Articles nav, Premium upsells, verified badges; defaults to Following tab
+- AI Post Studio: per-account voice profiles, bring-your-own-model generation, drafts, direct posting, and rate-limited scheduling through the logged-in X session
 
 Loaded as unpacked extension; not yet published to the Chrome Web Store.
 
@@ -18,12 +19,14 @@ Loaded as unpacked extension; not yet published to the Chrome Web Store.
 | File | Role |
 |---|---|
 | `content/twitter.js` | content script on x.com/twitter.com — Clean X DOM tweaks + Grok helpers |
-| `background.js` | service worker — screenshot scroll/capture/stitch pipeline, downloads, messaging |
-| `popup.html` / `popup.js` | popup UI (multi-page: screenshot, Grok, Clean X settings) |
+| `content/ai-post-studio.js` | content script on x.com/twitter.com — compose posts and collect profile writing |
+| `background.js` / `ai-post-studio/background.js` | MV3 service worker and AI Post Studio module — screenshots, downloads, posting, scraping, and queue alarms |
+| `ai-post-studio/` | full-page AI Post Studio dashboard |
+| `popup.html` / `popup.js` | popup UI (screenshot, AI Post Studio, Grok Export, Clean X settings) |
 | `manifest.json` | MV3 manifest |
 | `icons/` | extension icons |
 
-Permissions are deliberately minimal: `activeTab`, `tabs`, `scripting`. No `host_permissions` for broad sites — full-page screenshot uses `activeTab` so it only runs on the current tab when invoked.
+Full-page screenshot uses `activeTab` so it only runs on the current tab when invoked. X/Twitter and the configured AI provider are the only persistent host permissions.
 
 ## Roadmap
 
@@ -32,6 +35,7 @@ Permissions are deliberately minimal: `activeTab`, `tabs`, `scripting`. No `host
 - Toggleable Clean X settings (each hide is independently controllable)
 - Stitched full-page capture with progress indicator
 - Grok Markdown + HTML export
+- AI Post Studio with local-only provider keys and queue controls
 
 ### Next (v1.0)
 - Chrome Web Store publication (requires privacy policy, single-purpose justification, screenshots)
@@ -47,14 +51,14 @@ Permissions are deliberately minimal: `activeTab`, `tabs`, `scripting`. No `host
 
 ## Out of scope (deliberate)
 
-- **Posting / engagement automation on X** — read/clean only; we don't touch the composer
+- **Fully unattended X operation** — AI Post Studio runs only through an open, logged-in browser session
 - **Non-X platforms for Clean X** — Clean X is X-specific, not a generic site cleaner
 - **AI summarization / analysis of Grok exports** — out of scope; users export raw and process elsewhere
 - **Firefox MV2 support** — MV3 only going forward
 
 ## Design decisions to defend
 
-1. **Three tools, one extension.** Each is small enough that splitting into three extensions creates more install/permission overhead than it saves.
+1. **Four tools, one extension.** Each is small enough that splitting into separate extensions creates more install/permission overhead than it saves.
 2. **`activeTab` over `host_permissions`.** Privacy-preserving — screenshot only runs when invoked, not on every page load.
 3. **Clean X hides are toggleable, not opinionated.** Users opt in to each modification rather than getting our preferences forced.
 4. **MV3-only.** MV2 is sunsetting; no point carrying legacy support.

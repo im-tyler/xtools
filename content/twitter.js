@@ -189,25 +189,35 @@
       return;
     }
 
-    var delta = Math.round((viewW - colW) / 2 - colRect.left);
-    if (currentSettings.centerContent && delta > 0) {
-      _lastTx = delta + 'px';
+    // getBoundingClientRect includes our previous transform. Measure from the
+    // column's natural position so observer-triggered refreshes converge on
+    // one offset instead of recalculating from a shifted column.
+    var appliedTx = currentSettings.centerContent ? (parseFloat(_lastTx) || 0) : 0;
+    var naturalLeft = colRect.left - appliedTx;
+    var nextTx = currentSettings.centerContent
+      ? Math.max(0, Math.round((viewW - colW) / 2 - naturalLeft)) + 'px'
+      : '0px';
+    if (_lastTx !== nextTx) {
+      _lastTx = nextTx;
       document.documentElement.style.setProperty('--aie-tx', _lastTx);
     }
 
     if (currentSettings.keepSidebarLeft && header) {
       var navW = Math.round(header.getBoundingClientRect().width || 0);
-      var centeredPrimaryLeft = currentSettings.centerContent && delta > 0
-        ? colRect.left + delta
-        : colRect.left;
-      _lastNavLeft = Math.max(0, Math.round(centeredPrimaryLeft - navW)) + 'px';
-      document.documentElement.style.setProperty('--aie-nav-left', _lastNavLeft);
+      var centeredPrimaryLeft = naturalLeft + parseFloat(_lastTx);
+      var nextNavLeft = Math.max(0, Math.round(centeredPrimaryLeft - navW)) + 'px';
+      if (_lastNavLeft !== nextNavLeft) {
+        _lastNavLeft = nextNavLeft;
+        document.documentElement.style.setProperty('--aie-nav-left', _lastNavLeft);
+      }
     }
   }
 
   function resetNavAlignment() {
     document.documentElement.style.removeProperty('--aie-tx');
     document.documentElement.style.removeProperty('--aie-nav-left');
+    _lastTx = '0px';
+    _lastNavLeft = '0px';
   }
 
   function scheduleAlignNav() {

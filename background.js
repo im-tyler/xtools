@@ -1,3 +1,5 @@
+importScripts("ai-post-studio/background.js");
+
 function notifyPopup(data) {
   try { chrome.runtime.sendMessage(data).catch(function () {}); } catch (e) {}
 }

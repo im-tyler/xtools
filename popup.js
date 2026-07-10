@@ -1,5 +1,27 @@
 var currentTabId = null;
 
+function refreshAiPostStudioStats() {
+  var stats = document.getElementById("ai-post-studio-stats");
+  if (!stats) return;
+  chrome.storage.local.get({ posts: [] }, function (data) {
+    var posts = Array.isArray(data.posts) ? data.posts : [];
+    var drafts = posts.filter(function (post) { return post.status === "draft"; }).length;
+    var queued = posts.filter(function (post) { return post.status === "queued"; }).length;
+    stats.textContent = drafts + " draft" + (drafts === 1 ? "" : "s") + " ready · " + queued + " queued";
+  });
+}
+
+document.getElementById("btn-ai-post-studio").addEventListener("click", function () {
+  chrome.tabs.create({ url: chrome.runtime.getURL("ai-post-studio/index.html") });
+  window.close();
+});
+
+chrome.storage.onChanged.addListener(function (changes, area) {
+  if (area === "local" && changes.posts) refreshAiPostStudioStats();
+});
+
+refreshAiPostStudioStats();
+
 document.querySelectorAll("[data-page]").forEach(function (el) {
   el.addEventListener("click", function () {
     var target = el.getAttribute("data-page");
