@@ -14,6 +14,7 @@ const state = {
 const listeners = new Set();
 let selfWrite = false;
 let selfWriteTimer = null;
+let pendingScrapeApply = null;
 
 export function defaultSettings() {
   return {
@@ -100,8 +101,12 @@ async function persist() {
 }
 
 export function initSync() {
-  chrome.storage.onChanged.addListener((_changes, area) => {
+  chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local" || selfWrite) return;
+    if (changes.pendingScrapes) {
+      applyPendingScrapes();
+      return;
+    }
     load();
   });
 }
@@ -273,7 +278,13 @@ export async function collectMuse(accountId, handle) {
 /* The background parks scrape results in storage (pendingScrapes) so they
  * survive the dashboard closing mid-collect. Single apply path for both the
  * live response and the catch-up on load. Returns items applied. */
-export async function applyPendingScrapes() {
+export function applyPendingScrapes() {
+  if (pendingScrapeApply) return pendingScrapeApply;
+  pendingScrapeApply = applyPendingScrapesNow().finally(() => { pendingScrapeApply = null; });
+  return pendingScrapeApply;
+}
+
+async function applyPendingScrapesNow() {
   const { pendingScrapes = [] } = await chrome.storage.local.get("pendingScrapes");
   if (!pendingScrapes.length) return 0;
   await chrome.storage.local.set({ pendingScrapes: [] });
@@ -314,7 +325,7 @@ export async function applyPendingScrapes() {
     }
   }
   if (changed) {
-    persist();
+    await persist();
     notify();
   }
   return applied;
