@@ -128,7 +128,7 @@ export function addAccount(name) {
   const a = makeAccount(name || "New account");
   state.accounts.push(a);
   state.activeAccountId = a.id;
-  state.view = "voice";
+  state.view = "context";
   persist();
   notify();
   return a;

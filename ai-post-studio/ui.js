@@ -26,6 +26,8 @@ const uiState = {
   pullingOwn: false,
   learning: false,
   topic: "",
+  contextTab: "voice",
+  productFetching: false,
 };
 
 /* Only one profile scrape at a time — parallel background-tab scrapes are the
@@ -166,17 +168,17 @@ function renderTopbar(state) {
     `<button class="tab ${v === state.view ? "active" : ""}" data-action="nav" data-view="${v}">${label}</button>`;
   el.innerHTML = `
     <div class="top-row">
+      <nav class="tabs">
+        ${tab("feed", "Feed")}
+        ${tab("queue", queued > 0 ? `Queue<span class="tab-count">${queued}</span>` : "Queue")}
+        ${tab("context", "Context")}
+        ${tab("settings", "Settings")}
+      </nav>
       <div class="top-actions">
         <button class="btn-icon topbar-theme" data-action="toggle-theme" title="Toggle theme">${themeIcon}</button>
         ${accountSwitcher(state, acc)}
       </div>
     </div>
-    <nav class="tabs">
-      ${tab("feed", "Feed")}
-      ${tab("queue", queued > 0 ? `Queue<span class="tab-count">${queued}</span>` : "Queue")}
-      ${tab("voice", "Voice")}
-      ${tab("settings", "Settings")}
-    </nav>
     <div class="top-sub">${subtitleFor(state, acc)}</div>`;
 }
 
@@ -189,7 +191,7 @@ function subtitleFor(state, acc) {
     const n = state.posts.filter((p) => p.status === "queued").length;
     return n ? n + " scheduled" + (n === 1 ? "" : "s") : "Scheduled posts fire automatically";
   }
-  if (state.view === "voice") return "Teach AI Post Studio how you write";
+  if (state.view === "context") return uiState.contextTab === "product" ? "Product facts used for generation" : "Teach AI Post Studio how you write";
   if (state.view === "settings") return "Connection, generation, and safety";
   return "";
 }
@@ -235,7 +237,7 @@ function renderContent(state) {
   switch (state.view) {
     case "feed": html = viewFeed(state, acc); break;
     case "queue": html = viewQueue(state, acc); break;
-    case "voice": html = viewVoice(state, acc); break;
+    case "context": html = viewContext(state, acc); break;
     case "settings": html = viewSettings(state); break;
     default: html = "";
   }
@@ -405,8 +407,18 @@ function queueCard(p) {
 
 /* ----------------------------- VOICE ----------------------------- */
 
+function viewContext(state, acc) {
+  const active = uiState.contextTab === "product" ? "product" : "voice";
+  const tab = (id, label) => `<button class="context-tab ${active === id ? "active" : ""}" data-action="context-tab" data-context-tab="${id}">${label}</button>`;
+  const body = active === "product" ? viewProductContext(acc) : viewVoice(state, acc);
+  return `<div class="wrap">
+    <div class="context-tabs">${tab("voice", "Voice")}${tab("product", "Product")}</div>
+    ${body}
+  </div>`;
+}
+
 function viewVoice(state, acc) {
-  if (!acc) return `<div class="wrap"></div>`;
+  if (!acc) return "";
   const examples = acc.context || "";
   const refs = acc.references || "";
   const pillars = acc.pillars || "";
@@ -452,7 +464,40 @@ function viewVoice(state, acc) {
   if (uiState.genProfile) profile = profileSkeleton();
   else if (acc.profile) profile = profilePanel(acc);
 
-  return `<div class="wrap">${sources}${profile}${learnedPanel(state, acc)}</div>`;
+  return `${sources}${profile}${learnedPanel(state, acc)}`;
+}
+
+function viewProductContext(acc) {
+  if (!acc) return "";
+  const sources = acc.productSources || [];
+  const sourceRows = sources.length
+    ? `<div class="product-sources">${sources.map((source, index) => `<div class="product-source">
+        <div class="product-source-copy">
+          <strong>${escapeText(source.title || source.url)}</strong>
+          <span>${escapeText(source.url)} · ${source.text ? source.text.length.toLocaleString() + " characters" : "no text"}</span>
+        </div>
+        <button class="btn-icon danger" data-action="remove-product-source" data-id="${index}" title="Remove source">${ic.trash(16)}</button>
+      </div>`).join("")}</div>`
+    : `<span class="meta">No product pages yet. Add a homepage, pricing page, documentation, or product page to ground generated posts in real details.</span>`;
+  return `<section class="panel">
+    <div class="panel-head"><h2><span class="sec-ico">${ic.hash(18)}</span>Product context</h2></div>
+    <div class="panel-body">
+      <label class="field">
+        <span class="field-label">Product brief</span>
+        <textarea class="voice-area sm" id="productContext" placeholder="The product, audience, differentiators, launch context, claims to avoid, and any current priorities…">${escapeText(acc.productContext || "")}</textarea>
+        <span class="field-hint">This is factual generation context. It never changes the voice profile.</span>
+      </label>
+      <div class="field">
+        <span class="field-label">Product pages</span>
+        <div class="key-row">
+          <input class="input" id="productSourceUrl" placeholder="https://example.com/product">
+          <button class="btn-ghost sm" data-action="add-product-source" ${uiState.productFetching ? "disabled" : ""}>${ic.plus(16)}<span>${uiState.productFetching ? "Reading…" : "Add page"}</span></button>
+        </div>
+        <span class="field-hint">XTools asks permission for each domain, reads the visible page text, and stores it only in this browser.</span>
+      </div>
+      ${sourceRows}
+    </div>
+  </section>`;
 }
 
 function learnedPanel(state, acc) {
@@ -749,6 +794,10 @@ function wireGlobal() {
       e.preventDefault();
       doAddMuse();
     }
+    if (e.key === "Enter" && e.target && e.target.id === "productSourceUrl") {
+      e.preventDefault();
+      doAddProductSource();
+    }
   });
 }
 
@@ -767,7 +816,8 @@ function onGlobalClick(e) {
     case "select-account": setActiveAccount(id); uiState.menuOpen = false; break;
     case "new-account": addAccount("New account"); break;
     case "goto-settings": setView("settings"); uiState.menuOpen = false; break;
-    case "goto-voice": setView("voice"); break;
+    case "goto-voice": uiState.contextTab = "voice"; setView("context"); break;
+    case "context-tab": uiState.contextTab = t.dataset.contextTab === "product" ? "product" : "voice"; render(getState()); break;
     case "generate": doGenerate(); break;
     case "count-inc": updateSettings({ generateCount: Math.min(10, (getState().settings.generateCount || 5) + 1) }); break;
     case "count-dec": updateSettings({ generateCount: Math.max(1, (getState().settings.generateCount || 5) - 1) }); break;
@@ -802,6 +852,8 @@ function onGlobalClick(e) {
     case "add-muse": doAddMuse(); break;
     case "collect-muse": doCollectMuse(t.dataset.handle); break;
     case "remove-muse": { const a = getActiveAccount(); if (a) removeMuse(a.id, t.dataset.handle); break; }
+    case "add-product-source": doAddProductSource(); break;
+    case "remove-product-source": removeProductSource(+id); break;
     default: break;
   }
 }
@@ -809,7 +861,7 @@ function onGlobalClick(e) {
 function onGlobalInput(e) {
   const t = e.target;
   const acc = getActiveAccount();
-  const fieldMap = { voiceExamples: "context", voiceRefs: "references", voicePillars: "pillars" };
+  const fieldMap = { voiceExamples: "context", voiceRefs: "references", voicePillars: "pillars", productContext: "productContext" };
   if (acc && fieldMap[t.id]) {
     setAccountField(acc.id, fieldMap[t.id], t.value);
     flashSaved();
@@ -861,8 +913,10 @@ function onGlobalChange(e) {
 function requestOriginPermission(url) {
   try {
     const origin = new URL(url).origin + "/*";
-    chrome.permissions.request({ origins: [origin] }, () => {});
-  } catch (e) {}
+    return chrome.permissions.request({ origins: [origin] });
+  } catch (e) {
+    return Promise.resolve(false);
+  }
 }
 
 /* ============================ actions ============================ */
@@ -1067,6 +1121,52 @@ async function doCollectMuse(handle) {
   }
 }
 
+/* ---------- product sources ---------- */
+
+async function doAddProductSource() {
+  const acc = getActiveAccount();
+  const input = document.getElementById("productSourceUrl");
+  if (!acc || !input || !input.value.trim() || uiState.productFetching) return;
+  let url = input.value.trim();
+  if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+  try {
+    const parsed = new URL(url);
+    if (!/^https?:$/.test(parsed.protocol)) throw new Error("Use an http or https URL.");
+    if ((acc.productSources || []).some((source) => source.url === parsed.href)) {
+      toast("That page is already included", "warn");
+      return;
+    }
+    const granted = await requestOriginPermission(parsed.href);
+    if (!granted) throw new Error("Permission is required to read that product page.");
+    uiState.productFetching = true;
+    render(getState());
+    const response = await fetch(parsed.href, { redirect: "follow" });
+    if (!response.ok) throw new Error("Page returned " + response.status + ".");
+    const html = await response.text();
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    doc.querySelectorAll("script,style,noscript,svg,nav,footer,form,button").forEach((el) => el.remove());
+    const root = doc.querySelector("main,article,[role=main]") || doc.body;
+    const text = (root && root.textContent || "").replace(/\s+/g, " ").trim().slice(0, 12000);
+    if (text.length < 80) throw new Error("Could not read enough product text from that page.");
+    const title = (doc.querySelector("meta[property='og:title']") || {}).content || doc.title || new URL(response.url).hostname;
+    const sources = (acc.productSources || []).concat({ url: response.url, title: title.trim().slice(0, 180), text, fetchedAt: Date.now() });
+    setAccountField(acc.id, "productSources", sources.slice(-6));
+    toast("Added product page context", "ok");
+  } catch (e) {
+    toast((e && e.message) || "Could not read that product page", "error");
+  } finally {
+    uiState.productFetching = false;
+    render(getState());
+  }
+}
+
+function removeProductSource(index) {
+  const acc = getActiveAccount();
+  if (!acc || !Number.isInteger(index)) return;
+  setAccountField(acc.id, "productSources", (acc.productSources || []).filter((_source, i) => i !== index));
+  render(getState());
+}
+
 /* ---------- onboarding ---------- */
 
 async function obNext() {
@@ -1099,7 +1199,7 @@ async function obNext() {
   render(getState());
 }
 
-function obFinish(voice, view = "voice") {
+function obFinish(voice, view = "context") {
   const acc = getActiveAccount();
   if (acc && voice != null) persistContext(acc.id, voice);
   uiState.obStep = 0;

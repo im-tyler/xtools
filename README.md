@@ -13,7 +13,7 @@ Four tools, one extension:
 - **Full Page Screenshot** — capture an entire page (any site) as a single stitched image, not just the visible viewport. Scrolls, captures, and stitches automatically with a progress indicator.
 - **Grok Export** — export your Grok conversations as Markdown or HTML. Includes scan, a download queue, and a "delete all chats" action.
 - **Clean X** — a distraction-free X/Twitter: default to the Following tab, and hide suggested content, inline prompts, the sidebar, trending, who-to-follow, engagement metrics, Grok/Jobs/Communities/Articles nav, Premium upsells, and verified badges — each toggleable.
-- **AI Post Studio** — create per-account voice profiles, generate and remix original posts with your own OpenAI-compatible API key, review or edit drafts, collect reference-account writing, and post immediately or schedule a rate-limited queue. Posts use your logged-in X browser session; no X API plan is required.
+- **AI Post Studio** — create per-account voice profiles, add factual product briefs and product-page sources, generate and remix original posts with your own OpenAI-compatible API key, review or edit drafts, collect reference-account writing, and post immediately or schedule a rate-limited queue. Posts use your logged-in X browser session; no X API plan is required.
 
 ## Install (load unpacked)
 
@@ -50,7 +50,7 @@ Host access is limited to `x.com`, `twitter.com`, OpenAI, and DeepSeek. AI Post 
 
 ## AI Post Studio
 
-AI Post Studio stores its accounts, drafts, voice material, queue, and API key in browser extension storage. It can generate through DeepSeek, OpenAI, or a custom OpenAI-compatible endpoint. Open it from the popup in Chrome's side panel, or use **Open in tab** for a full-page workspace. Scheduled posts run only while X is available in the browser and are bounded by the configured rate limit and active-hours window.
+AI Post Studio stores its accounts, drafts, voice material, product context, queue, and API key in browser extension storage. Product pages are read only after you grant access to each domain, and their text is used as factual grounding rather than voice material. It can generate through DeepSeek, OpenAI, or a custom OpenAI-compatible endpoint. Open it from the popup in Chrome's side panel, or use **Open in tab** for a full-page workspace. Scheduled posts run only while X is available in the browser and are bounded by the configured rate limit and active-hours window.
 
 Automated posting may violate X rules and depends on X's changing DOM. Review generated copy and use queue automation at your own discretion.
 

@@ -43,9 +43,10 @@ export async function generatePosts({ account, count, settings, apiKey, signal, 
   const examples = sampleExamples((account && account.context ? account.context : "").trim(), 12000);
   const voiceGuide = voiceGuideFrom(account);
   const styleRefs = account && account.museInGeneration ? museBlocks(account, 5, 3).join("\n\n") : "";
+  const productContext = productContextFrom(account);
   // Over-ask so the dedupe filter below can drop repeats and still fill the request.
   const ask = Math.min(12, count + 2);
-  const messages = buildMessages({ examples, voiceGuide, styleRefs, history, topic, count: ask, tone: settings.tone, mode: "generate" });
+  const messages = buildMessages({ examples, voiceGuide, styleRefs, productContext, history, topic, count: ask, tone: settings.tone, mode: "generate" });
   const data = await call({ apiKey, settings, messages, temperature: 0.85, signal, json: true });
   const texts = parseArray(data).map(clean);
   // Last line of defense: drop anything that reproduces an example or history.
@@ -73,6 +74,7 @@ export async function remixPost({ text, account, settings, apiKey, signal, histo
     text,
     examples,
     voiceGuide: voiceGuideFrom(account),
+    productContext: productContextFrom(account),
     history,
     tone: settings.tone,
     mode: "remix",
@@ -208,6 +210,21 @@ function voiceGuideFrom(account) {
   return out.trim();
 }
 
+/* Product context is factual grounding, never voice material. Keep it bounded
+ * so a handful of pages cannot crowd out the author's own writing examples. */
+function productContextFrom(account) {
+  const manual = ((account && account.productContext) || "").trim();
+  const sources = ((account && account.productSources) || [])
+    .map((source) => {
+      const text = String(source && source.text || "").trim();
+      if (!text) return "";
+      return "Source: " + (source.title || source.url || "Product page") + "\n" + text;
+    })
+    .filter(Boolean)
+    .join("\n\n");
+  return trimChunks([manual, sources].filter(Boolean).join("\n\n"), 14000);
+}
+
 /* Distill posting preferences from revealed behavior: what got posted, what
  * got discarded, and how drafts were edited before posting. */
 export async function learnPreferences({ posted, discarded, edits, settings, apiKey, signal }) {
@@ -255,7 +272,7 @@ export async function testConnection({ settings, apiKey }) {
   return true;
 }
 
-function buildMessages({ examples, voiceGuide, styleRefs, history, topic, count, tone, mode, text }) {
+function buildMessages({ examples, voiceGuide, styleRefs, productContext, history, topic, count, tone, mode, text }) {
   const sys = [
     "You are a ghostwriter that matches an author's voice precisely.",
     "You write short social posts (max 280 characters) that read like the author wrote them.",
@@ -267,6 +284,7 @@ function buildMessages({ examples, voiceGuide, styleRefs, history, topic, count,
   if (mode === "remix") {
     const parts = ["Rewrite this post in a fresh way — a different angle, hook, or structure — while keeping the author's voice and meaning."];
     if (voiceGuide) parts.push("Voice guide to follow:\n\"\"\"\n" + voiceGuide + "\n\"\"\"");
+    if (productContext) parts.push("Product facts to preserve. Do not invent beyond these facts:\n\"\"\"\n" + productContext + "\n\"\"\"");
     parts.push("Keep it under 280 characters. Return ONLY the rewritten post text (no quotes, no labels, no preamble).");
     parts.push("", "ORIGINAL POST:", text);
     if (examples) parts.push("\nGROUNDING EXAMPLES:\n" + examples);
@@ -284,6 +302,7 @@ function buildMessages({ examples, voiceGuide, styleRefs, history, topic, count,
   if (examples) parts.push("Grounding examples of the voice — voice reference only, their content is off-limits:\n\"\"\"\n" + examples + "\n\"\"\"");
   else if (!voiceGuide) parts.push("No examples provided. Write in a clean, confident, original voice.");
   if (styleRefs) parts.push("Style references from other authors — borrow cadence, structure, and energy only. Never their identity, topics, claims, or specific phrasings:\n\"\"\"\n" + styleRefs + "\n\"\"\"");
+  if (productContext) parts.push("Product context is factual grounding only. Use it when relevant, never invent claims beyond it, and do not treat it as voice material:\n\"\"\"\n" + productContext + "\n\"\"\"");
   if (history && history.recent && history.recent.length) {
     parts.push("The author already posted or queued these — never repeat, paraphrase, or re-angle any of them:\n\"\"\"\n" + trimChunks(history.recent.join("\n\n"), 6000) + "\n\"\"\"");
   }
