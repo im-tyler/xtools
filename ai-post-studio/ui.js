@@ -635,13 +635,6 @@ function viewSettings(state) {
       <span class="field-hint">Link the X @handle each profile posts as. Posting then refuses to fire unless that account is the logged-in x.com session, and the profile picture fills in automatically. Leave blank to skip the check.</span>
       <button class="btn-ghost" data-action="new-account">${ic.plus(16)}<span>New account</span></button>
     `)}
-    ${section("Pith migration", ic.external(18), `
-      <label class="field">
-        <span class="field-label">Import a Pith backup</span>
-        <input class="input" id="pithImport" type="file" accept="application/json,.json">
-        <span class="field-hint">Export the backup from Pith's popup first. Importing replaces this studio's accounts, drafts, queue, voice material, posting history, and API key. The backup file is sensitive; delete it after confirming the migration.</span>
-      </label>
-    `)}
     <p class="footer-note">XTools v1.1.0 · AI Post Studio for X · No X API required</p>
   </div>`;
 }
@@ -817,11 +810,6 @@ function onGlobalInput(e) {
 
 function onGlobalChange(e) {
   const t = e.target;
-  if (t.id === "pithImport") {
-    importPithBackup(t.files && t.files[0]);
-    t.value = "";
-    return;
-  }
   if (t.dataset.role === "setting") {
     const key = t.dataset.key;
     let val = t.type === "checkbox" ? t.checked : t.value;
@@ -1052,37 +1040,6 @@ async function doCollectMuse(handle) {
   } finally {
     uiState.collectingMuse = null;
     render(getState());
-  }
-}
-
-/* ---------- Pith migration ---------- */
-
-async function importPithBackup(file) {
-  if (!file) return;
-  if (!window.confirm("Import this Pith backup? It replaces the current AI Post Studio accounts, drafts, queue, voice material, posting history, and API key.")) return;
-  try {
-    const backup = JSON.parse(await file.text());
-    const data = backup && backup.format === "pith-backup" && backup.version === 1 ? backup.data : null;
-    if (!data || !Array.isArray(data.accounts) || !Array.isArray(data.posts)) {
-      throw new Error("This is not a valid Pith backup.");
-    }
-    const accounts = data.accounts;
-    const activeAccountId = accounts.some((account) => account.id === data.activeAccountId)
-      ? data.activeAccountId
-      : (accounts[0] && accounts[0].id) || null;
-    await chrome.storage.local.set({
-      accounts,
-      posts: data.posts,
-      postLogs: data.postLogs && typeof data.postLogs === "object" ? data.postLogs : {},
-      settings: { ...(data.settings || {}), onboarded: true },
-      apiKey: typeof data.apiKey === "string" ? data.apiKey : "",
-      activeAccountId,
-      pendingScrapes: Array.isArray(data.pendingScrapes) ? data.pendingScrapes : [],
-    });
-    setView("voice");
-    toast("Pith backup imported. Review your voice profile before generating.", "ok");
-  } catch (e) {
-    toast((e && e.message) || "Could not import the Pith backup", "error");
   }
 }
 

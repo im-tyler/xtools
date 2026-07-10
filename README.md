@@ -52,8 +52,6 @@ Host access is limited to `x.com`, `twitter.com`, OpenAI, and DeepSeek. AI Post 
 
 AI Post Studio stores its accounts, drafts, voice material, queue, and API key in browser extension storage. It can generate through DeepSeek, OpenAI, or a custom OpenAI-compatible endpoint. Open it from the popup in Chrome's side panel, or use **Open in tab** for a full-page workspace. Scheduled posts run only while X is available in the browser and are bounded by the configured rate limit and active-hours window.
 
-To migrate from Pith, export a backup from Pith's popup, then use **Settings → Pith migration** in AI Post Studio. The backup includes your API key, so keep it private and delete it after confirming the import.
-
 Automated posting may violate X rules and depends on X's changing DOM. Review generated copy and use queue automation at your own discretion.
 
 ## Status
