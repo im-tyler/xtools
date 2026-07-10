@@ -7,6 +7,7 @@
   window.__xtoolsAiPostStudioInjected = true;
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    if (!msg || !msg.type) return false;
     (async () => {
       try {
         if (msg && msg.type === "POST_TWEET") {
@@ -18,7 +19,7 @@
         } else if (msg && msg.type === "PROFILE_META") {
           sendResponse(await profileMeta(msg.handle));
         } else {
-          sendResponse({ ok: false, error: "unknown" });
+          return;
         }
       } catch (e) {
         sendResponse({ ok: false, error: String((e && e.message) || e) });

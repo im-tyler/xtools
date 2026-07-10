@@ -1031,6 +1031,7 @@ async function doPullOwn() {
   try {
     const res = await collectOwnPosts(acc.id);
     if (res && res.ok && res.count) toast("Added " + res.count + " of your posts to the voice examples", "ok");
+    else if (res && res.ok && res.error) toast("Could not reach the X profile: " + res.error, "error");
     else if (res && res.ok) toast("Nothing new found on @" + acc.handle + " — already collected, or check your x.com login", "warn");
     else toast("Collect failed: " + ((res && res.error) || "unknown"), "error");
   } finally {
@@ -1057,6 +1058,7 @@ async function doCollectMuse(handle) {
   try {
     const res = await collectMuse(acc.id, handle);
     if (res && res.ok && res.count) toast("Collected " + res.count + " from @" + handle, "ok");
+    else if (res && res.ok && res.error) toast("Could not reach @" + handle + ": " + res.error, "error");
     else if (res && res.ok) toast("Nothing collected from @" + handle + " — check the handle and that you're logged into x.com", "warn");
     else toast("Collect failed: " + ((res && res.error) || "unknown"), "error");
   } finally {

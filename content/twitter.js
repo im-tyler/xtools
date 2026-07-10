@@ -1298,6 +1298,7 @@
   }
 
   chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
+    if (!msg || !msg.action) return false;
     if (msg.action === "twitter-update" && msg.settings) {
       applySettings(msg.settings);
     } else if (msg.action === "grok-export-history-start") {

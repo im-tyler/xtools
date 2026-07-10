@@ -85,6 +85,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 /* ---------------- message router ---------------- */
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (!msg || !msg.type) return false;
   (async () => {
     try {
       switch (msg && msg.type) {
@@ -105,7 +106,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           sendResponse({ ok: true });
           break;
         default:
-          sendResponse({ ok: false, error: "unknown_message" });
+          return;
       }
     } catch (e) {
       sendResponse({ ok: false, error: String((e && e.message) || e) });
@@ -203,10 +204,15 @@ async function scrapeMuse(msg) {
   const tab = await chrome.tabs.create({ url: "https://x.com/" + h, active: false });
   let tweets = [];
   let replies = [];
+  let scrapeError = "";
   try {
-    tweets = await scrapeInTab(tab.id, h, "/" + h, msg.tweets || 30);
+    const tweetResult = await scrapeInTab(tab.id, h, "/" + h, msg.tweets || 30);
+    tweets = tweetResult.items;
+    scrapeError = tweetResult.error;
     await chrome.tabs.update(tab.id, { url: "https://x.com/" + h + "/with_replies" });
-    replies = await scrapeInTab(tab.id, h, "/with_replies", msg.replies || 20);
+    const replyResult = await scrapeInTab(tab.id, h, "/with_replies", msg.replies || 20);
+    replies = replyResult.items;
+    scrapeError = scrapeError || replyResult.error;
   } finally {
     chrome.tabs.remove(tab.id).catch(() => {});
   }
@@ -215,7 +221,7 @@ async function scrapeMuse(msg) {
     pendingScrapes.push({ accountId: msg.accountId, kind: msg.kind, handle: h, tweets, replies, at: Date.now() });
     await chrome.storage.local.set({ pendingScrapes });
   }
-  return { ok: true, count: tweets.length + replies.length };
+  return { ok: true, count: tweets.length + replies.length, error: scrapeError };
 }
 
 async function scrapeInTab(tabId, handle, pathSubstr, limit) {
@@ -223,8 +229,10 @@ async function scrapeInTab(tabId, handle, pathSubstr, limit) {
   await sleep(2000); // SPA hydration after document complete
   const res = await chrome.tabs
     .sendMessage(tabId, { type: "SCRAPE_PROFILE", handle, limit })
-    .catch(() => null);
-  return res && res.ok ? res.items || [] : [];
+    .catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
+  return res && res.ok
+    ? { items: res.items || [], error: "" }
+    : { items: [], error: (res && res.error) || "content_script_unreachable" };
 }
 
 /* Grab an account's profile picture URL from its profile page. */

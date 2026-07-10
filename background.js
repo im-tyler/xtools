@@ -177,6 +177,7 @@ function twitterScanScript() {
 }
 
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+  if (!message || !message.action) return false;
   if (message.action === "screenshot") {
     screenshot(message.tabId);
     sendResponse({ started: true });
@@ -199,5 +200,5 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     });
     return true;
   }
-  return true;
+  return false;
 });

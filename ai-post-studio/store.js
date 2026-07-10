@@ -245,7 +245,7 @@ export async function collectOwnPosts(accountId) {
     .catch(() => null);
   if (!res || !res.ok) return res || { ok: false, error: "no_response" };
   const applied = await applyPendingScrapes();
-  return { ok: true, count: applied };
+  return { ok: true, count: applied, error: res.error || "" };
 }
 
 export async function collectMuse(accountId, handle) {
@@ -254,7 +254,7 @@ export async function collectMuse(accountId, handle) {
     .catch(() => null);
   if (!res || !res.ok) return res || { ok: false, error: "no_response" };
   const applied = await applyPendingScrapes();
-  return { ok: true, count: applied };
+  return { ok: true, count: applied, error: res.error || "" };
 }
 
 /* The background parks scrape results in storage (pendingScrapes) so they
