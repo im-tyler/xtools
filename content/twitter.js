@@ -250,6 +250,22 @@
     }
   }
 
+  function waitForNativeReplyButton(textarea) {
+    return new Promise(function (resolve) {
+      var start = Date.now();
+      (function check() {
+        var scope = textarea.closest('[role="dialog"]') || document;
+        var buttons = Array.from(scope.querySelectorAll('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]'));
+        var reply = buttons.filter(function (button) {
+          return inlineReplyVisible(button) && button.getAttribute("disabled") === null && button.getAttribute("aria-disabled") !== "true";
+        }).pop();
+        if (reply) return resolve(reply);
+        if (Date.now() - start > 7000) return resolve(null);
+        setTimeout(check, 100);
+      })();
+    });
+  }
+
   async function stageInlineReply(tweet, composer) {
     var input = composer.querySelector('[data-xtools-inline-reply-input]');
     var button = composer.querySelector('[data-xtools-inline-reply-submit]');
@@ -267,8 +283,18 @@
       return;
     }
     fillReplyTextarea(textarea, text);
+    button.textContent = "Replying...";
+    var nativeSubmit = await waitForNativeReplyButton(textarea);
+    if (!nativeSubmit) {
+      button.disabled = false;
+      button.textContent = "Review in X";
+      return;
+    }
+    nativeSubmit.click();
+    input.value = "";
     button.disabled = false;
-    button.textContent = "Ready in X";
+    button.textContent = "Replied";
+    setTimeout(function () { button.textContent = "Reply"; }, 1800);
   }
 
   var _alignTimer = null;
