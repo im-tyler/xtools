@@ -27,6 +27,7 @@ const uiState = {
   learning: false,
   topic: "",
   steerMode: "guidance",
+  genOptionsOpen: false,
   contextTab: "voice",
   productFetching: false,
 };
@@ -271,15 +272,18 @@ function viewFeed(state, acc) {
         <button class="btn-primary" data-action="generate" ${uiState.generating ? "disabled" : ""}>
           ${ic.spark(18)}<span>${uiState.generating ? "Generating…" : "Generate"}</span>
         </button>
+        <div class="gen-options-wrap">
+          <button class="btn-ghost sm" data-action="toggle-gen-options" aria-expanded="${uiState.genOptionsOpen}">Options</button>
+          ${uiState.genOptionsOpen ? `<div class="gen-options-menu">
+            <div class="gen-option"><span>Length</span><div class="gen-segment">${choice("length", "concise", "Concise")}${choice("length", "standard", "Standard")}</div></div>
+            <div class="gen-option"><span>Focus</span><div class="gen-segment">${choice("focus", "voice", "Voice")}${choice("focus", "balanced", "Balanced")}${choice("focus", "product", "Product", !hasProductContext)}</div></div>
+            <div class="gen-option"><span>Steer</span><div class="gen-segment"><button class="gen-choice ${uiState.steerMode === "specific" ? "" : "active"}" data-action="steer-mode" data-value="guidance">Guidance</button><button class="gen-choice ${uiState.steerMode === "specific" ? "active" : ""}" data-action="steer-mode" data-value="specific">Specific</button></div></div>
+          </div>` : ""}
+        </div>
       </div>
     </div>
     <div class="gen-steer">
       <input class="input" id="genTopic" placeholder="Steer this batch (optional) — a topic, angle, or idea" value="${escapeAttr(uiState.topic || "")}">
-      <div class="gen-options">
-        <div class="gen-option"><span>Length</span><div class="gen-segment">${choice("length", "concise", "Concise")}${choice("length", "standard", "Standard")}</div></div>
-        <div class="gen-option"><span>Focus</span><div class="gen-segment">${choice("focus", "voice", "Voice")}${choice("focus", "balanced", "Balanced")}${choice("focus", "product", "Product", !hasProductContext)}</div></div>
-        <div class="gen-option"><span>Steer</span><div class="gen-segment"><button class="gen-choice ${uiState.steerMode === "specific" ? "" : "active"}" data-action="steer-mode" data-value="guidance">Guidance</button><button class="gen-choice ${uiState.steerMode === "specific" ? "active" : ""}" data-action="steer-mode" data-value="specific">Specific</button></div></div>
-      </div>
     </div>`;
 
   const posts = accountPosts(acc && acc.id).filter((p) => p.status !== "discarded");
@@ -837,13 +841,14 @@ function onGlobalClick(e) {
   const t = e.target.closest("[data-action]");
   if (!t) {
     if (uiState.menuOpen && !e.target.closest(".acct")) { uiState.menuOpen = false; render(getState()); }
+    if (uiState.genOptionsOpen && !e.target.closest(".gen-options-wrap")) { uiState.genOptionsOpen = false; render(getState()); }
     return;
   }
   const action = t.dataset.action;
   const id = t.dataset.id;
 
   switch (action) {
-    case "nav": setView(t.dataset.view); uiState.menuOpen = false; break;
+    case "nav": uiState.menuOpen = false; uiState.genOptionsOpen = false; setView(t.dataset.view); break;
     case "toggle-menu": uiState.menuOpen = !uiState.menuOpen; render(getState()); break;
     case "select-account": setActiveAccount(id); uiState.menuOpen = false; break;
     case "new-account": addAccount("New account"); break;
@@ -853,6 +858,7 @@ function onGlobalClick(e) {
     case "generate": doGenerate(); break;
     case "count-inc": updateSettings({ generateCount: Math.min(10, (getState().settings.generateCount || 5) + 1) }); break;
     case "count-dec": updateSettings({ generateCount: Math.max(1, (getState().settings.generateCount || 5) - 1) }); break;
+    case "toggle-gen-options": uiState.genOptionsOpen = !uiState.genOptionsOpen; render(getState()); break;
     case "gen-length": { const a = getActiveAccount(); if (a) { setAccountField(a.id, "generationLength", t.dataset.value === "concise" ? "concise" : "standard"); render(getState()); } break; }
     case "gen-focus": { const a = getActiveAccount(); if (a) { setAccountField(a.id, "generationFocus", ["voice", "balanced", "product"].includes(t.dataset.value) ? t.dataset.value : "balanced"); render(getState()); } break; }
     case "steer-mode": uiState.steerMode = t.dataset.value === "specific" ? "specific" : "guidance"; render(getState()); break;
@@ -990,6 +996,7 @@ async function doGenerate() {
   const acc = getActiveAccount();
   if (!acc) return;
   if (!state.apiKey) { toast("Add your API key in Settings first", "warn"); setView("settings"); return; }
+  uiState.genOptionsOpen = false;
   uiState.generating = true;
   uiState.genError = null;
   render(state);
