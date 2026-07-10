@@ -56,7 +56,7 @@
       return '@media (min-width: 900px) { header[role="banner"] { position: fixed !important; left: var(--aie-nav-left, 0px) !important; top: 0 !important; bottom: 0 !important; height: 100vh !important; transform: none !important; z-index: 10 !important; } header[role="banner"] > div { height: 100vh !important; } }';
     },
     hideTrending: function () { return '[data-testid="sidebarColumn"] [data-testid="trend"] { display: none !important; }'; },
-    hideWhoToFollow: function () { return '[aria-label="Who to follow"], [data-testid="WhoToFollow"], [data-testid="sidebarColumn"] [data-testid="UserCell"] { display: none !important; }'; },
+    hideWhoToFollow: function () { return '[aria-label="Who to follow"], [data-testid="WhoToFollow"] { display: none !important; }'; },
     hideViews: function () { return '[data-testid="views"] { display: none !important; }'; },
     hideMetrics: function () { return '[data-testid="reply"] span, [data-testid="retweet"] span, [data-testid="like"] span, [data-testid="bookmark"] span { visibility: hidden !important; }'; },
     hideBookmarkBtn: function () { return '[data-testid="bookmark"] { display: none !important; }'; },
@@ -149,8 +149,9 @@
 
   function hideWhoToFollowInFeed() {
     var path = location.pathname;
-    // On these pages user cards ARE the content — don't touch them
-    var isUserListPage = /^\/(?:search(?:\/|$)|[^/]+\/(?:followers|following|verified_followers)(?:\/|$)|i\/lists(?:\/|$))/.test(path);
+    // User cards on profiles include relationship context such as “Followers
+    // you know”. Only remove recommendation cards from the home timeline.
+    var isHomeTimeline = path === "/" || path === "/home";
 
     document.querySelectorAll('[data-testid="cellInnerDiv"]').forEach(function (cell) {
       if (cell.style.display === "none") return;
@@ -164,8 +165,8 @@
         }
       }
 
-      // Hide all user card cells except on pages where they are primary content
-      if (!isUserListPage && cell.querySelector('[data-testid="UserCell"]')) {
+      // Keep relationship modules and real user lists intact outside Home.
+      if (isHomeTimeline && cell.querySelector('[data-testid="UserCell"]')) {
         cell.style.display = "none";
       }
     });
