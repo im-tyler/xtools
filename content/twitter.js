@@ -62,7 +62,7 @@
     hideBookmarkBtn: function () { return '[data-testid="bookmark"] { display: none !important; }'; },
     hideShareBtn: function () { return '[data-testid="shareBtn"] { display: none !important; }'; },
     inlineReplyComposer: function () {
-      return '[data-xtools-inline-reply] { display:flex !important; gap:8px !important; margin:0 12px 8px !important; padding:0 0 8px !important; border-bottom:1px solid rgba(83,100,113,.35) !important; } [data-xtools-inline-reply-input] { min-width:0 !important; flex:1 !important; resize:vertical !important; min-height:36px !important; max-height:120px !important; padding:8px 10px !important; border:1px solid rgba(83,100,113,.7) !important; border-radius:10px !important; background:transparent !important; color:inherit !important; font:inherit !important; line-height:1.35 !important; } [data-xtools-inline-reply-input]:focus { outline:1px solid rgb(29,155,240) !important; border-color:rgb(29,155,240) !important; } [data-xtools-inline-reply-submit] { align-self:flex-end !important; padding:7px 12px !important; border:0 !important; border-radius:999px !important; background:rgb(29,155,240) !important; color:#fff !important; font:600 13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif !important; cursor:pointer !important; } [data-xtools-inline-reply-submit]:disabled { opacity:.55 !important; cursor:wait !important; }';
+      return '[data-xtools-inline-reply] { display:grid !important; grid-template-columns:32px minmax(0,1fr) auto !important; align-items:start !important; gap:10px !important; margin:0 12px 8px !important; padding:10px 0 8px !important; border-bottom:1px solid rgba(83,100,113,.35) !important; } [data-xtools-inline-reply-avatar] { width:32px !important; height:32px !important; border-radius:50% !important; object-fit:cover !important; background:rgb(83,100,113) !important; } [data-xtools-inline-reply-input] { min-width:0 !important; flex:1 !important; resize:vertical !important; min-height:36px !important; max-height:120px !important; padding:6px 0 !important; border:0 !important; border-radius:0 !important; background:transparent !important; color:inherit !important; font:400 15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif !important; line-height:1.45 !important; } [data-xtools-inline-reply-input]::placeholder { color:rgb(83,100,113) !important; } [data-xtools-inline-reply-input]:focus { outline:0 !important; } [data-xtools-inline-reply-submit] { align-self:center !important; padding:7px 14px !important; border:0 !important; border-radius:999px !important; background:rgb(29,155,240) !important; color:#fff !important; font:700 13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif !important; cursor:pointer !important; } [data-xtools-inline-reply-submit]:disabled { opacity:.55 !important; cursor:wait !important; }';
     },
     hideGrokNav: function () { return 'a[aria-label="Grok"] { display: none !important; }'; },
     hideXLogo: function () { return 'a[aria-label="X"] { display: none !important; }'; },
@@ -185,6 +185,18 @@
     });
   }
 
+  function isFocalTweet(tweet) {
+    if (!/\/status\/\d+/.test(location.pathname)) return false;
+    var primary = tweet.closest('[data-testid="primaryColumn"]');
+    if (!primary) return false;
+    return Array.from(primary.querySelectorAll('article[data-testid="tweet"]'))[0] === tweet;
+  }
+
+  function inlineReplyAvatar() {
+    var avatar = document.querySelector('[data-testid="SideNav_AccountSwitcher_Button"] img');
+    return avatar && avatar.getAttribute("src") || "";
+  }
+
   function injectInlineReplyComposers() {
     if (currentSettings.enabled === false || !currentSettings.inlineReplyComposer) {
       removeInlineReplyComposers();
@@ -195,10 +207,12 @@
     });
     document.querySelectorAll('article[data-testid="tweet"]').forEach(function (tweet) {
       if (tweet.dataset.xtoolsInlineReplyAttached) return;
+      if (isFocalTweet(tweet)) return;
       if (!tweet.querySelector('[data-testid="reply"]')) return;
       var composer = document.createElement("div");
       composer.setAttribute("data-xtools-inline-reply", "");
-      composer.innerHTML = '<textarea data-xtools-inline-reply-input placeholder="Write a reply..."></textarea><button type="button" data-xtools-inline-reply-submit>Reply</button>';
+      var avatar = inlineReplyAvatar();
+      composer.innerHTML = (avatar ? '<img data-xtools-inline-reply-avatar src="' + avatar + '" alt="">' : '<span data-xtools-inline-reply-avatar></span>') + '<textarea data-xtools-inline-reply-input placeholder="Post your reply"></textarea><button type="button" data-xtools-inline-reply-submit>Reply</button>';
       composer.addEventListener("click", function (event) { event.stopPropagation(); });
       composer.addEventListener("input", function (event) { event.stopPropagation(); });
       composer.querySelector('[data-xtools-inline-reply-submit]').addEventListener("click", function (event) {
