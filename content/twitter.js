@@ -62,7 +62,7 @@
     hideBookmarkBtn: function () { return '[data-testid="bookmark"] { display: none !important; }'; },
     hideShareBtn: function () { return '[data-testid="shareBtn"] { display: none !important; }'; },
     inlineReplyComposer: function () {
-      return '[data-xtools-inline-reply] { display:flex !important; gap:8px !important; margin:8px 12px 0 !important; padding:8px 0 2px !important; border-top:1px solid rgba(83,100,113,.35) !important; } [data-xtools-inline-reply-input] { min-width:0 !important; flex:1 !important; resize:vertical !important; min-height:36px !important; max-height:120px !important; padding:8px 10px !important; border:1px solid rgba(83,100,113,.7) !important; border-radius:10px !important; background:transparent !important; color:inherit !important; font:inherit !important; line-height:1.35 !important; } [data-xtools-inline-reply-input]:focus { outline:1px solid rgb(29,155,240) !important; border-color:rgb(29,155,240) !important; } [data-xtools-inline-reply-submit] { align-self:flex-end !important; padding:7px 12px !important; border:0 !important; border-radius:999px !important; background:rgb(29,155,240) !important; color:#fff !important; font:600 13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif !important; cursor:pointer !important; } [data-xtools-inline-reply-submit]:disabled { opacity:.55 !important; cursor:wait !important; }';
+      return '[data-xtools-inline-reply] { display:flex !important; gap:8px !important; margin:0 12px 8px !important; padding:0 0 8px !important; border-bottom:1px solid rgba(83,100,113,.35) !important; } [data-xtools-inline-reply-input] { min-width:0 !important; flex:1 !important; resize:vertical !important; min-height:36px !important; max-height:120px !important; padding:8px 10px !important; border:1px solid rgba(83,100,113,.7) !important; border-radius:10px !important; background:transparent !important; color:inherit !important; font:inherit !important; line-height:1.35 !important; } [data-xtools-inline-reply-input]:focus { outline:1px solid rgb(29,155,240) !important; border-color:rgb(29,155,240) !important; } [data-xtools-inline-reply-submit] { align-self:flex-end !important; padding:7px 12px !important; border:0 !important; border-radius:999px !important; background:rgb(29,155,240) !important; color:#fff !important; font:600 13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif !important; cursor:pointer !important; } [data-xtools-inline-reply-submit]:disabled { opacity:.55 !important; cursor:wait !important; }';
     },
     hideGrokNav: function () { return 'a[aria-label="Grok"] { display: none !important; }'; },
     hideXLogo: function () { return 'a[aria-label="X"] { display: none !important; }'; },
@@ -180,6 +180,9 @@
 
   function removeInlineReplyComposers() {
     document.querySelectorAll('[data-xtools-inline-reply]').forEach(function (el) { el.remove(); });
+    document.querySelectorAll('article[data-testid="tweet"]').forEach(function (tweet) {
+      delete tweet.dataset.xtoolsInlineReplyAttached;
+    });
   }
 
   function injectInlineReplyComposers() {
@@ -187,8 +190,11 @@
       removeInlineReplyComposers();
       return;
     }
+    document.querySelectorAll('[data-xtools-inline-reply]').forEach(function (composer) {
+      if (!composer._xtoolsTweet || !composer._xtoolsTweet.isConnected) composer.remove();
+    });
     document.querySelectorAll('article[data-testid="tweet"]').forEach(function (tweet) {
-      if (tweet.querySelector('[data-xtools-inline-reply]')) return;
+      if (tweet.dataset.xtoolsInlineReplyAttached) return;
       if (!tweet.querySelector('[data-testid="reply"]')) return;
       var composer = document.createElement("div");
       composer.setAttribute("data-xtools-inline-reply", "");
@@ -200,7 +206,11 @@
         event.stopPropagation();
         stageInlineReply(tweet, composer);
       });
-      tweet.appendChild(composer);
+      composer._xtoolsTweet = tweet;
+      tweet.dataset.xtoolsInlineReplyAttached = "true";
+      var cell = tweet.closest('[data-testid="cellInnerDiv"]');
+      var host = cell || tweet;
+      host.parentNode.insertBefore(composer, host.nextSibling);
     });
   }
 
