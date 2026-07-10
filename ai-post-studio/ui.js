@@ -255,6 +255,10 @@ function viewFeed(state, acc) {
     ? banner("Generation failed: " + uiState.genError, "generate", "Retry", ic.alert(18), "warn")
     : "";
   const count = state.settings.generateCount || 5;
+  const length = acc && acc.generationLength === "concise" ? "concise" : "standard";
+  const hasProductContext = !!(acc && ((acc.productContext || "").trim() || (acc.productSources || []).some((source) => (source.text || "").trim())));
+  const focus = acc && ["voice", "balanced", "product"].includes(acc.generationFocus) ? acc.generationFocus : "balanced";
+  const choice = (kind, value, label, disabled) => `<button class="gen-choice ${value === (kind === "length" ? length : focus) ? "active" : ""}" data-action="gen-${kind}" data-value="${value}" ${disabled ? "disabled" : ""}>${label}</button>`;
   const gen = `
     <div class="panel-head">
       <div class="gen-control">
@@ -270,6 +274,10 @@ function viewFeed(state, acc) {
     </div>
     <div class="gen-steer">
       <input class="input" id="genTopic" placeholder="Steer this batch (optional) — a topic, angle, or idea" value="${escapeAttr(uiState.topic || "")}">
+      <div class="gen-options">
+        <div class="gen-option"><span>Length</span><div class="gen-segment">${choice("length", "concise", "Concise")}${choice("length", "standard", "Standard")}</div></div>
+        <div class="gen-option"><span>Focus</span><div class="gen-segment">${choice("focus", "voice", "Voice")}${choice("focus", "balanced", "Balanced")}${choice("focus", "product", "Product", !hasProductContext)}</div></div>
+      </div>
     </div>`;
 
   const posts = accountPosts(acc && acc.id).filter((p) => p.status !== "discarded");
@@ -843,6 +851,8 @@ function onGlobalClick(e) {
     case "generate": doGenerate(); break;
     case "count-inc": updateSettings({ generateCount: Math.min(10, (getState().settings.generateCount || 5) + 1) }); break;
     case "count-dec": updateSettings({ generateCount: Math.max(1, (getState().settings.generateCount || 5) - 1) }); break;
+    case "gen-length": { const a = getActiveAccount(); if (a) { setAccountField(a.id, "generationLength", t.dataset.value === "concise" ? "concise" : "standard"); render(getState()); } break; }
+    case "gen-focus": { const a = getActiveAccount(); if (a) { setAccountField(a.id, "generationFocus", ["voice", "balanced", "product"].includes(t.dataset.value) ? t.dataset.value : "balanced"); render(getState()); } break; }
     case "post-now": doPostNow(id); break;
     case "remix": doRemix(id); break;
     case "queue": doQueue(id); break;
@@ -981,7 +991,7 @@ async function doGenerate() {
   uiState.genError = null;
   render(state);
   try {
-    const texts = await generatePosts({ account: acc, count: state.settings.generateCount, settings: state.settings, apiKey: state.apiKey, history: buildHistory(acc), topic: (uiState.topic || "").trim() });
+    const texts = await generatePosts({ account: acc, count: state.settings.generateCount, settings: state.settings, apiKey: state.apiKey, history: buildHistory(acc), topic: (uiState.topic || "").trim(), length: acc.generationLength, focus: acc.generationFocus });
     if (!texts.length) { uiState.genError = "Nothing new came back — the model may be repeating existing posts. Try again."; toast(uiState.genError, "warn"); }
     else { addPosts(acc.id, texts); toast("Generated " + texts.length + " post" + (texts.length === 1 ? "" : "s"), "ok"); }
   } catch (err) {
