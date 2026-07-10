@@ -84,9 +84,16 @@ function obStepHtml(step, state) {
   }
   if (step === 1) {
     return `
-      <h2>Name this profile</h2>
-      <p class="ob-sub">Each profile holds its own voice, feed, and queue. You can add more later.</p>
-      <input class="input" id="ob-name" value="${escapeAttr((acc && acc.name) || "My account")}">
+      <h2>Profile and account</h2>
+      <p class="ob-sub">Give this persona a name and optionally link its X handle. The handle lets AI Post Studio pull your posts and prevents posting through the wrong account.</p>
+      <label class="field">
+        <span class="field-label">Profile name</span>
+        <input class="input" id="ob-name" value="${escapeAttr((acc && acc.name) || "My account")}">
+      </label>
+      <label class="field">
+        <span class="field-label">Your X handle <span class="meta">optional</span></span>
+        <input class="input" id="ob-handle" placeholder="@yourhandle" value="${acc && acc.handle ? "@" + escapeAttr(acc.handle) : ""}">
+      </label>
       <div class="ob-actions">
         <button class="btn-ghost" data-action="ob-back">Back</button>
         <button class="btn-ghost" data-action="ob-later">Set up later</button>
@@ -113,10 +120,22 @@ function obStepHtml(step, state) {
       </div>`;
   }
   const ctx = (acc && acc.context) || "";
+  const pullOwnControl = acc && acc.handle
+    ? `<button class="btn-ghost sm" data-action="pull-own" ${uiState.pullingOwn ? "disabled" : ""}>
+        ${ic.remix(14)}<span>${uiState.pullingOwn ? "Collecting…" : "Pull from @" + escapeText(acc.handle)}</span>
+      </button>`
+    : `<span class="meta">Link your handle on the previous step to pull posts.</span>`;
   return `
-    <h2>Start your voice</h2>
-    <p class="ob-sub">Paste a few posts now, then continue to the full Voice studio to pull from your @handle, add reference accounts, generate a profile, preview it, and make it yours.</p>
-    <textarea class="voice-area" id="ob-voice" placeholder="Paste example posts, separated by a blank line…">${escapeText(ctx)}</textarea>
+    <h2>Build your voice</h2>
+    <p class="ob-sub">Use your own writing first, then add reference accounts for cadence and structure. You can refine everything in Voice after setup.</p>
+    <label class="field">
+      <div class="field-row">
+        <span class="field-label">Your posts</span>
+        ${pullOwnControl}
+      </div>
+      <textarea class="voice-area" id="ob-voice" placeholder="Paste example posts, separated by a blank line…">${escapeText(ctx)}</textarea>
+    </label>
+    ${musesHtml(acc)}
     <div class="ob-actions">
       <button class="btn-ghost" data-action="ob-back">Back</button>
       <button class="btn-ghost" data-action="ob-later">Set up later</button>
@@ -1049,12 +1068,20 @@ async function doCollectMuse(handle) {
 
 /* ---------- onboarding ---------- */
 
-function obNext() {
+async function obNext() {
   const step = uiState.obStep || 0;
   const acc = getActiveAccount();
   if (step === 1) {
     const nameEl = document.getElementById("ob-name");
     if (nameEl && acc) renameAccount(acc.id, (nameEl.value || "My account").trim() || "My account");
+    const handleEl = document.getElementById("ob-handle");
+    if (handleEl && handleEl.value.trim() && acc) {
+      const res = await setAccountHandle(acc.id, handleEl.value);
+      if (!res || !res.ok) {
+        toast((res && res.error) || "Could not link that X handle", "warn");
+        return;
+      }
+    }
   } else if (step === 2) {
     const provEl = document.getElementById("ob-provider");
     const keyEl = document.getElementById("ob-key");
