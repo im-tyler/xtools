@@ -208,9 +208,8 @@
       });
       composer._xtoolsTweet = tweet;
       tweet.dataset.xtoolsInlineReplyAttached = "true";
-      var cell = tweet.closest('[data-testid="cellInnerDiv"]');
-      var host = cell || tweet;
-      host.parentNode.insertBefore(composer, host.nextSibling);
+      var host = tweet.parentNode;
+      host.insertBefore(composer, tweet.nextSibling);
     });
   }
 
