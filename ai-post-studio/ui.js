@@ -493,7 +493,7 @@ function viewProductContext(acc) {
           <input class="input" id="productSourceUrl" placeholder="https://example.com/product">
           <button class="btn-ghost sm" data-action="add-product-source" ${uiState.productFetching ? "disabled" : ""}>${ic.plus(16)}<span>${uiState.productFetching ? "Reading…" : "Add page"}</span></button>
         </div>
-        <span class="field-hint">XTools asks permission for each domain, reads the visible page text, and stores it only in this browser.</span>
+        <span class="field-hint">XTools asks once for each new domain, saves a snapshot locally, and never re-fetches it while generating.</span>
       </div>
       ${sourceRows}
     </div>
@@ -913,7 +913,10 @@ function onGlobalChange(e) {
 function requestOriginPermission(url) {
   try {
     const origin = new URL(url).origin + "/*";
-    return chrome.permissions.request({ origins: [origin] });
+    const permissions = { origins: [origin] };
+    return chrome.permissions.contains(permissions).then((granted) =>
+      granted ? true : chrome.permissions.request(permissions)
+    );
   } catch (e) {
     return Promise.resolve(false);
   }
@@ -1144,11 +1147,21 @@ async function doAddProductSource() {
     if (!response.ok) throw new Error("Page returned " + response.status + ".");
     const html = await response.text();
     const doc = new DOMParser().parseFromString(html, "text/html");
-    doc.querySelectorAll("script,style,noscript,svg,nav,footer,form,button").forEach((el) => el.remove());
-    const root = doc.querySelector("main,article,[role=main]") || doc.body;
-    const text = (root && root.textContent || "").replace(/\s+/g, " ").trim().slice(0, 12000);
-    if (text.length < 80) throw new Error("Could not read enough product text from that page.");
     const title = (doc.querySelector("meta[property='og:title']") || {}).content || doc.title || new URL(response.url).hostname;
+    const description = [
+      (doc.querySelector("meta[name='description']") || {}).content,
+      (doc.querySelector("meta[property='og:description']") || {}).content,
+    ].filter(Boolean).join(" ");
+    const structured = Array.from(doc.querySelectorAll("script[type='application/ld+json']"))
+      .map((el) => el.textContent || "")
+      .join(" ");
+    doc.querySelectorAll("script,style,noscript,svg,nav,footer,form,button").forEach((el) => el.remove());
+    const pageText = [doc.querySelector("main"), doc.querySelector("article"), doc.querySelector("[role=main]"), doc.body]
+      .filter(Boolean)
+      .map((el) => (el.textContent || "").replace(/\s+/g, " ").trim())
+      .sort((a, b) => b.length - a.length)[0] || "";
+    const text = [title, description, structured, pageText].filter(Boolean).join("\n\n").slice(0, 12000);
+    if (text.length < 80) throw new Error("Could not read enough product text from that page.");
     const sources = (acc.productSources || []).concat({ url: response.url, title: title.trim().slice(0, 180), text, fetchedAt: Date.now() });
     setAccountField(acc.id, "productSources", sources.slice(-6));
     toast("Added product page context", "ok");

@@ -50,7 +50,7 @@ Host access is limited to `x.com`, `twitter.com`, OpenAI, and DeepSeek. AI Post 
 
 ## AI Post Studio
 
-AI Post Studio stores its accounts, drafts, voice material, product context, queue, and API key in browser extension storage. Product pages are read only after you grant access to each domain, and their text is used as factual grounding rather than voice material. It can generate through DeepSeek, OpenAI, or a custom OpenAI-compatible endpoint. Open it from the popup in Chrome's side panel, or use **Open in tab** for a full-page workspace. Scheduled posts run only while X is available in the browser and are bounded by the configured rate limit and active-hours window.
+AI Post Studio stores its accounts, drafts, voice material, product context, queue, and API key in browser extension storage. Product pages are read only after you grant access to each domain, saved as a local snapshot when added, and used as factual grounding rather than voice material. Generation never re-fetches those pages. It can generate through DeepSeek, OpenAI, or a custom OpenAI-compatible endpoint. Open it from the popup in Chrome's side panel, or use **Open in tab** for a full-page workspace. Scheduled posts run only while X is available in the browser and are bounded by the configured rate limit and active-hours window.
 
 Automated posting may violate X rules and depends on X's changing DOM. Review generated copy and use queue automation at your own discretion.
 
