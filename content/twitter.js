@@ -150,7 +150,7 @@
   function hideWhoToFollowInFeed() {
     var path = location.pathname;
     // On these pages user cards ARE the content — don't touch them
-    var isUserListPage = /^\/(search$|[^/]+\/(followers|following)|i\/lists)/.test(path);
+    var isUserListPage = /^\/(?:search(?:\/|$)|[^/]+\/(?:followers|following|verified_followers)(?:\/|$)|i\/lists(?:\/|$))/.test(path);
 
     document.querySelectorAll('[data-testid="cellInnerDiv"]').forEach(function (cell) {
       if (cell.style.display === "none") return;
