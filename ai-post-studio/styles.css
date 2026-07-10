@@ -81,8 +81,7 @@ a:hover { text-decoration: underline; }
   gap: 9px;
 }
 .top-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.brand-inline { display: inline-flex; align-items: center; gap: 8px; font-weight: 750; font-size: 15px; letter-spacing: .2px; }
-.top-actions { display: flex; align-items: center; gap: 8px; }
+.top-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .topbar-theme { color: var(--text-faint); }
 .topbar-theme:hover { color: var(--text); }
 .tabs { display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }

@@ -166,7 +166,6 @@ function renderTopbar(state) {
     `<button class="tab ${v === state.view ? "active" : ""}" data-action="nav" data-view="${v}">${label}</button>`;
   el.innerHTML = `
     <div class="top-row">
-      <div class="brand-inline">${ic.logo(20)}<span>XTools / AI Post Studio</span></div>
       <div class="top-actions">
         <button class="btn-icon topbar-theme" data-action="toggle-theme" title="Toggle theme">${themeIcon}</button>
         ${accountSwitcher(state, acc)}
