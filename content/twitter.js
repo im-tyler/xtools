@@ -20,6 +20,7 @@
     hideMetrics: false,
     hideBookmarkBtn: false,
     hideShareBtn: false,
+    inlineReplyComposer: false,
     hideGrokNav: false,
     hideXLogo: true,
     hideJobsNav: true,
@@ -60,6 +61,9 @@
     hideMetrics: function () { return '[data-testid="reply"] span, [data-testid="retweet"] span, [data-testid="like"] span, [data-testid="bookmark"] span { visibility: hidden !important; }'; },
     hideBookmarkBtn: function () { return '[data-testid="bookmark"] { display: none !important; }'; },
     hideShareBtn: function () { return '[data-testid="shareBtn"] { display: none !important; }'; },
+    inlineReplyComposer: function () {
+      return '[data-xtools-inline-reply] { display:flex !important; gap:8px !important; margin:8px 12px 0 !important; padding:8px 0 2px !important; border-top:1px solid rgba(83,100,113,.35) !important; } [data-xtools-inline-reply-input] { min-width:0 !important; flex:1 !important; resize:vertical !important; min-height:36px !important; max-height:120px !important; padding:8px 10px !important; border:1px solid rgba(83,100,113,.7) !important; border-radius:10px !important; background:transparent !important; color:inherit !important; font:inherit !important; line-height:1.35 !important; } [data-xtools-inline-reply-input]:focus { outline:1px solid rgb(29,155,240) !important; border-color:rgb(29,155,240) !important; } [data-xtools-inline-reply-submit] { align-self:flex-end !important; padding:7px 12px !important; border:0 !important; border-radius:999px !important; background:rgb(29,155,240) !important; color:#fff !important; font:600 13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif !important; cursor:pointer !important; } [data-xtools-inline-reply-submit]:disabled { opacity:.55 !important; cursor:wait !important; }';
+    },
     hideGrokNav: function () { return 'a[aria-label="Grok"] { display: none !important; }'; },
     hideXLogo: function () { return 'a[aria-label="X"] { display: none !important; }'; },
     hideJobsNav: function () { return 'a[href*="/jobs"] { display: none !important; }'; },
@@ -165,6 +169,83 @@
         cell.style.display = "none";
       }
     });
+  }
+
+  function inlineReplyVisible(el) {
+    if (!el) return false;
+    var rect = el.getBoundingClientRect();
+    var style = getComputedStyle(el);
+    return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+  }
+
+  function removeInlineReplyComposers() {
+    document.querySelectorAll('[data-xtools-inline-reply]').forEach(function (el) { el.remove(); });
+  }
+
+  function injectInlineReplyComposers() {
+    if (currentSettings.enabled === false || !currentSettings.inlineReplyComposer) {
+      removeInlineReplyComposers();
+      return;
+    }
+    document.querySelectorAll('article[data-testid="tweet"]').forEach(function (tweet) {
+      if (tweet.querySelector('[data-xtools-inline-reply]')) return;
+      if (!tweet.querySelector('[data-testid="reply"]')) return;
+      var composer = document.createElement("div");
+      composer.setAttribute("data-xtools-inline-reply", "");
+      composer.innerHTML = '<textarea data-xtools-inline-reply-input placeholder="Write a reply..."></textarea><button type="button" data-xtools-inline-reply-submit>Reply</button>';
+      composer.addEventListener("click", function (event) { event.stopPropagation(); });
+      composer.addEventListener("input", function (event) { event.stopPropagation(); });
+      composer.querySelector('[data-xtools-inline-reply-submit]').addEventListener("click", function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        stageInlineReply(tweet, composer);
+      });
+      tweet.appendChild(composer);
+    });
+  }
+
+  function waitForReplyTextarea() {
+    return new Promise(function (resolve) {
+      var start = Date.now();
+      (function check() {
+        var fields = Array.from(document.querySelectorAll('[data-testid="tweetTextarea_0"]'));
+        var visible = fields.filter(inlineReplyVisible).pop();
+        if (visible) return resolve(visible);
+        if (Date.now() - start > 8000) return resolve(null);
+        setTimeout(check, 100);
+      })();
+    });
+  }
+
+  function fillReplyTextarea(textarea, text) {
+    textarea.focus();
+    var inserted = false;
+    try { inserted = document.execCommand("insertText", false, text); } catch (e) {}
+    if (!inserted || !textarea.textContent.trim()) {
+      textarea.textContent = text;
+      textarea.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
+    }
+  }
+
+  async function stageInlineReply(tweet, composer) {
+    var input = composer.querySelector('[data-xtools-inline-reply-input]');
+    var button = composer.querySelector('[data-xtools-inline-reply-submit]');
+    var text = (input && input.value || "").trim();
+    if (!text) { if (input) input.focus(); return; }
+    var nativeReply = tweet.querySelector('[data-testid="reply"]');
+    if (!nativeReply) return;
+    button.disabled = true;
+    button.textContent = "Opening...";
+    nativeReply.click();
+    var textarea = await waitForReplyTextarea();
+    if (!textarea) {
+      button.disabled = false;
+      button.textContent = "Reply";
+      return;
+    }
+    fillReplyTextarea(textarea, text);
+    button.disabled = false;
+    button.textContent = "Ready in X";
   }
 
   var _alignTimer = null;
@@ -278,9 +359,11 @@
         maybeForceFollowingTab();
       }
       if (settings.hideWhoToFollow) hideWhoToFollowInFeed();
+      injectInlineReplyComposers();
       if (settings.centerContent || settings.keepSidebarLeft) scheduleAlignNav();
       else resetNavAlignment();
     } else {
+      removeInlineReplyComposers();
       resetNavAlignment();
     }
   }
@@ -315,6 +398,7 @@
       if (currentSettings.followingDefault) maybeForceFollowingTab();
       if (currentSettings.hideDiscoverMore) hideDiscoverMoreContainers();
       if (currentSettings.hideWhoToFollow) hideWhoToFollowInFeed();
+      if (currentSettings.inlineReplyComposer) injectInlineReplyComposers();
       if (currentSettings.centerContent || currentSettings.keepSidebarLeft) scheduleAlignNav();
       injectArticlesToMoreMenu();
     });

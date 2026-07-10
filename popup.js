@@ -792,6 +792,7 @@ var defaultTwitterSettings = {
   hideMetrics: false,
   hideBookmarkBtn: false,
   hideShareBtn: false,
+  inlineReplyComposer: false,
   hideGrokNav: true,
   hideXLogo: true,
   hideJobsNav: true,
