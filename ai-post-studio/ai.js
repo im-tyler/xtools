@@ -97,8 +97,9 @@ export async function draftReply({ candidate, account, settings, apiKey, signal 
   const voiceGuide = voiceGuideFrom(account);
   const productContext = productContextFrom(account);
   const parts = [
-    "Write one concise, substantive reply to this X post in the author's voice.",
-    "Add a real observation, useful extension, or thoughtful question. Do not use generic praise, engagement bait, or hashtags.",
+    "Write one concise, substantive reply to this original X post in the author's voice.",
+    "First infer the post's central claim, then contribute one of: a precise extension, a useful caveat, a concrete implication, or a thoughtful question.",
+    "Address the post directly. Do not restate it, flatter the author, use generic praise, engagement bait, hashtags, or a sales pitch.",
     "Never invent facts or claim experience the author has not provided. Keep it under 280 characters.",
     "Return only the reply text.",
     "",
@@ -106,11 +107,11 @@ export async function draftReply({ candidate, account, settings, apiKey, signal 
   ];
   if (voiceGuide) parts.push("\nVOICE GUIDE:\n" + voiceGuide);
   if (examples) parts.push("\nVOICE EXAMPLES (style only):\n" + examples);
-  if (productContext) parts.push("\nPRODUCT FACTS (use only if naturally relevant; never pitch):\n" + trimChunks(productContext, 3000));
+  if (productContext) parts.push("\nPRODUCT FACTS (use only when they make the reply materially more useful; never mention, pitch, or promote the product otherwise):\n" + trimChunks(productContext, 1800));
   const data = await call({
     apiKey, settings, temperature: 0.8, signal,
     messages: [
-      { role: "system", content: "You write authentic, concise X replies. You do not flatter, spam, or impersonate." },
+      { role: "system", content: "You write authentic, concise X replies that add value to the conversation. You do not flatter, spam, pitch, or impersonate." },
       { role: "user", content: parts.join("\n") },
     ],
   });

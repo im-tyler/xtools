@@ -33,6 +33,7 @@ const uiState = {
   productFetching: false,
   replyCandidates: [],
   replyScanning: false,
+  replyGenerating: false,
   replyBusyId: null,
 };
 
@@ -387,10 +388,11 @@ function skeletonTweet() {
 
 function viewReplies(state, acc) {
   const scanning = uiState.replyScanning;
+  const generating = uiState.replyGenerating;
   const candidates = uiState.replyCandidates;
   const scan = `<div class="panel-head reply-toolbar">
-    <div><h2><span class="sec-ico">${ic.remix(18)}</span>Reply lab</h2><p class="muted">Scan posts currently visible in the active X tab, then choose what deserves a reply.</p></div>
-    <button class="btn-primary" data-action="scan-replies" ${scanning ? "disabled" : ""}>${ic.remix(18)}<span>${scanning ? "Scanning…" : "Scan visible posts"}</span></button>
+    <div><h2><span class="sec-ico">${ic.remix(18)}</span>Reply lab</h2><p class="muted">Scan original posts visible in X, then draft replies you can edit, send, or skip.</p></div>
+    <div class="reply-toolbar-actions"><button class="btn-ghost" data-action="scan-replies" ${scanning || generating ? "disabled" : ""}>${ic.remix(16)}<span>${scanning ? "Scanning…" : "Scan"}</span></button><button class="btn-primary" data-action="generate-replies" ${!candidates.length || scanning || generating ? "disabled" : ""}>${ic.spark(16)}<span>${generating ? "Generating…" : "Generate replies"}</span></button></div>
   </div>`;
   const body = !candidates.length
     ? emptyState(ic.remix(26), "No posts scanned", "Open X, scroll to posts you genuinely want to engage with, then scan them here.", [])
@@ -399,16 +401,19 @@ function viewReplies(state, acc) {
 }
 
 function replyCard(candidate, acc) {
-  const busy = uiState.replyBusyId === candidate.id;
+  const busy = uiState.replyBusyId === candidate.id || uiState.replyGenerating;
   const draft = candidate.draft || "";
-  return `<article class="reply-card" data-id="${escapeAttr(candidate.id)}">
-    <div class="reply-source"><span>@${escapeText(candidate.author)}</span><a href="${escapeAttr(candidate.url)}" target="_blank" rel="noreferrer">Open post</a></div>
-    <div class="reply-post">${linkify(candidate.text)}</div>
-    <textarea class="voice-area sm" data-role="reply-draft" data-id="${escapeAttr(candidate.id)}" placeholder="Draft a reply, or write one yourself…">${escapeText(draft)}</textarea>
-    <div class="reply-actions">
-      <button class="btn-ghost sm" data-action="draft-reply" data-id="${escapeAttr(candidate.id)}" ${busy ? "disabled" : ""}>${ic.spark(16)}<span>${busy ? "Working…" : draft ? "Remix" : "Draft"}</span></button>
-      <button class="btn-primary sm" data-action="send-reply" data-id="${escapeAttr(candidate.id)}" ${busy || !draft.trim() ? "disabled" : ""}>${ic.send(16)}<span>Send reply</span></button>
-      <button class="btn-ghost sm" data-action="skip-reply" data-id="${escapeAttr(candidate.id)}">${ic.close(16)}<span>Skip</span></button>
+  return `<article class="tweet reply-draft" data-id="${escapeAttr(candidate.id)}">
+    <div class="tweet-avatar"><span class="reply-author-avatar">${escapeText(candidate.author.charAt(0).toUpperCase())}</span></div>
+    <div class="tweet-main">
+      <div class="tweet-head"><span class="t-name">@${escapeText(candidate.author)}</span><span class="t-spacer"></span><a class="reply-open" href="${escapeAttr(candidate.url)}" target="_blank" rel="noreferrer">Open post</a></div>
+      <div class="tweet-body">${linkify(candidate.text)}</div>
+      <textarea class="tweet-edit reply-draft-input" rows="3" data-role="reply-draft" data-id="${escapeAttr(candidate.id)}" placeholder="Draft a reply, or write one yourself…">${escapeText(draft)}</textarea>
+      <div class="tweet-actions">
+        <button class="xact x-remix" data-action="draft-reply" data-id="${escapeAttr(candidate.id)}" ${busy ? "disabled" : ""}>${ic.spark(16)}<span>${busy ? "Working…" : draft ? "Remix" : "Draft"}</span></button>
+        <button class="xact x-post" data-action="send-reply" data-id="${escapeAttr(candidate.id)}" ${busy || !draft.trim() ? "disabled" : ""}>${ic.send(16)}<span>Send</span></button>
+        <span class="t-spacer"></span><button class="xact" data-action="skip-reply" data-id="${escapeAttr(candidate.id)}">${ic.close(16)}<span>Skip</span></button>
+      </div>
     </div>
   </article>`;
 }
@@ -893,6 +898,7 @@ function onGlobalClick(e) {
     case "context-tab": uiState.contextTab = t.dataset.contextTab === "product" ? "product" : "voice"; render(getState()); break;
     case "generate": doGenerate(); break;
     case "scan-replies": doScanReplies(); break;
+    case "generate-replies": doGenerateReplies(); break;
     case "draft-reply": doDraftReply(id); break;
     case "send-reply": doSendReply(id); break;
     case "skip-reply": removeReplyCandidate(id); break;
@@ -1091,6 +1097,32 @@ async function doDraftReply(id) {
   } catch (e) {
     toast((e && e.message) || "Could not draft a reply", "error");
   } finally {
+    uiState.replyBusyId = null;
+    render(getState());
+  }
+}
+
+async function doGenerateReplies() {
+  const state = getState();
+  const acc = getActiveAccount();
+  if (!acc || !uiState.replyCandidates.length || uiState.replyGenerating) return;
+  if (!state.apiKey) { toast("Add your API key in Settings first", "warn"); setView("settings"); return; }
+  uiState.replyGenerating = true;
+  render(state);
+  let drafted = 0;
+  try {
+    for (const candidate of uiState.replyCandidates) {
+      uiState.replyBusyId = candidate.id;
+      render(getState());
+      try {
+        const draft = await draftReply({ candidate, account: acc, settings: state.settings, apiKey: state.apiKey });
+        if (draft) { candidate.draft = draft; drafted++; }
+      } catch (e) {}
+    }
+    if (drafted) toast("Drafted " + drafted + " repl" + (drafted === 1 ? "y" : "ies") + " for review", "ok");
+    else toast("Could not draft replies for these posts", "error");
+  } finally {
+    uiState.replyGenerating = false;
     uiState.replyBusyId = null;
     render(getState());
   }

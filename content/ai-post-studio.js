@@ -168,7 +168,9 @@
     const seen = new Set();
     const items = [];
     document.querySelectorAll('article[data-testid="tweet"]').forEach((article) => {
-      if (items.length >= 12 || article.querySelector('[data-testid="socialContext"]')) return;
+      if (items.length >= 8 || article.querySelector('[data-testid="socialContext"]')) return;
+      const header = (article.innerText || "").split("\n").slice(0, 6).join(" ");
+      if (/\bReplying to\s+@/i.test(header)) return;
       const textEl = article.querySelector('[data-testid="tweetText"]');
       const text = textEl ? (textEl.textContent || "").trim().slice(0, 1200) : "";
       const author = authorOf(article);
