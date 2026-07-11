@@ -27,6 +27,7 @@ const uiState = {
   learning: false,
   topic: "",
   steerMode: "guidance",
+  steerEnabled: false,
   genOptionsOpen: false,
   contextTab: "voice",
   productFetching: false,
@@ -277,13 +278,12 @@ function viewFeed(state, acc) {
           ${uiState.genOptionsOpen ? `<div class="gen-options-menu">
             <div class="gen-option"><span>Length</span><div class="gen-segment">${choice("length", "concise", "Concise")}${choice("length", "standard", "Standard")}</div></div>
             <div class="gen-option"><span>Focus</span><div class="gen-segment">${choice("focus", "voice", "Voice")}${choice("focus", "balanced", "Balanced")}${choice("focus", "product", "Product", !hasProductContext)}</div></div>
-            <div class="gen-option"><span>Steer</span><div class="gen-segment"><button class="gen-choice ${uiState.steerMode === "specific" ? "" : "active"}" data-action="steer-mode" data-value="guidance">Guidance</button><button class="gen-choice ${uiState.steerMode === "specific" ? "active" : ""}" data-action="steer-mode" data-value="specific">Specific</button></div></div>
+            <div class="gen-option"><span>Steer batch</span><button class="gen-choice ${uiState.steerEnabled ? "active" : ""}" data-action="toggle-steer">${uiState.steerEnabled ? "On" : "Off"}</button></div>
+            ${uiState.steerEnabled ? `<input class="input gen-steer-input" id="genTopic" placeholder="Topic, angle, or instruction" value="${escapeAttr(uiState.topic || "")}">
+            <div class="gen-option"><span>Mode</span><div class="gen-segment"><button class="gen-choice ${uiState.steerMode === "specific" ? "" : "active"}" data-action="steer-mode" data-value="guidance">Guidance</button><button class="gen-choice ${uiState.steerMode === "specific" ? "active" : ""}" data-action="steer-mode" data-value="specific">Specific</button></div></div>` : ""}
           </div>` : ""}
         </div>
       </div>
-    </div>
-    <div class="gen-steer">
-      <input class="input" id="genTopic" placeholder="Steer this batch (optional) — a topic, angle, or idea" value="${escapeAttr(uiState.topic || "")}">
     </div>`;
 
   const posts = accountPosts(acc && acc.id).filter((p) => p.status !== "discarded");
@@ -861,6 +861,7 @@ function onGlobalClick(e) {
     case "toggle-gen-options": uiState.genOptionsOpen = !uiState.genOptionsOpen; render(getState()); break;
     case "gen-length": { const a = getActiveAccount(); if (a) { setAccountField(a.id, "generationLength", t.dataset.value === "concise" ? "concise" : "standard"); render(getState()); } break; }
     case "gen-focus": { const a = getActiveAccount(); if (a) { setAccountField(a.id, "generationFocus", ["voice", "balanced", "product"].includes(t.dataset.value) ? t.dataset.value : "balanced"); render(getState()); } break; }
+    case "toggle-steer": uiState.steerEnabled = !uiState.steerEnabled; render(getState()); break;
     case "steer-mode": uiState.steerMode = t.dataset.value === "specific" ? "specific" : "guidance"; render(getState()); break;
     case "post-now": doPostNow(id); break;
     case "remix": doRemix(id); break;
@@ -1001,7 +1002,7 @@ async function doGenerate() {
   uiState.genError = null;
   render(state);
   try {
-    const texts = await generatePosts({ account: acc, count: state.settings.generateCount, settings: state.settings, apiKey: state.apiKey, history: buildHistory(acc), topic: (uiState.topic || "").trim(), steerMode: uiState.steerMode, length: acc.generationLength, focus: acc.generationFocus });
+    const texts = await generatePosts({ account: acc, count: state.settings.generateCount, settings: state.settings, apiKey: state.apiKey, history: buildHistory(acc), topic: uiState.steerEnabled ? (uiState.topic || "").trim() : "", steerMode: uiState.steerMode, length: acc.generationLength, focus: acc.generationFocus });
     if (!texts.length) { uiState.genError = "Nothing new came back — the model may be repeating existing posts. Try again."; toast(uiState.genError, "warn"); }
     else { addPosts(acc.id, texts); toast("Generated " + texts.length + " post" + (texts.length === 1 ? "" : "s"), "ok"); }
   } catch (err) {
