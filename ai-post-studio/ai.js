@@ -91,6 +91,32 @@ export async function remixPost({ text, account, settings, apiKey, signal, histo
   return ok || "";
 }
 
+export async function draftReply({ candidate, account, settings, apiKey, signal }) {
+  if (!apiKey) throw new Error("Add your API key in Settings to draft replies.");
+  const examples = sampleExamples(voiceExamplesFrom(account), 8000);
+  const voiceGuide = voiceGuideFrom(account);
+  const productContext = productContextFrom(account);
+  const parts = [
+    "Write one concise, substantive reply to this X post in the author's voice.",
+    "Add a real observation, useful extension, or thoughtful question. Do not use generic praise, engagement bait, or hashtags.",
+    "Never invent facts or claim experience the author has not provided. Keep it under 280 characters.",
+    "Return only the reply text.",
+    "",
+    "POST BY @" + candidate.author + ":\n" + candidate.text,
+  ];
+  if (voiceGuide) parts.push("\nVOICE GUIDE:\n" + voiceGuide);
+  if (examples) parts.push("\nVOICE EXAMPLES (style only):\n" + examples);
+  if (productContext) parts.push("\nPRODUCT FACTS (use only if naturally relevant; never pitch):\n" + trimChunks(productContext, 3000));
+  const data = await call({
+    apiKey, settings, temperature: 0.8, signal,
+    messages: [
+      { role: "system", content: "You write authentic, concise X replies. You do not flatter, spam, or impersonate." },
+      { role: "user", content: parts.join("\n") },
+    ],
+  });
+  return clean((data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "");
+}
+
 /* Generate one sample post from the (possibly unconfirmed) current profile,
  * so the user can judge whether the voice aligns before committing. */
 export async function previewPost({ account, settings, apiKey, signal }) {

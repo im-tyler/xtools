@@ -92,6 +92,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         case "POST_NOW":
           sendResponse(await postNow(msg.text, msg.postId));
           break;
+        case "POST_REPLY":
+          sendResponse(await postReply(msg.text, msg.url, msg.accountId));
+          break;
         case "RUN_IN_X":
           sendResponse(await runInXTab(msg.payload || {}));
           break;
@@ -125,6 +128,12 @@ async function postNow(text, postId) {
     await appendPostLog(postId, text);
   }
   return res;
+}
+
+async function postReply(text, url, accountId) {
+  const { accounts = [] } = await chrome.storage.local.get("accounts");
+  const account = accounts.find((a) => a.id === accountId);
+  return runInXTab({ type: "POST_REPLY", text, url, expected: (account && account.handle) || "" });
 }
 
 /* Durable per-account log of everything actually posted. Lives in its own

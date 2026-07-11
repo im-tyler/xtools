@@ -1,13 +1,13 @@
 import {
   getState, getActiveAccount, setView, setActiveAccount, addAccount,
   renameAccount, deleteAccount, persistContext, accountPosts, addPosts,
-  updatePost, removePost, postNow, scrapeVisibleInto, setApiKey, updateSettings,
+  updatePost, removePost, postNow, scrapeVisibleInto, scanReplyCandidates, sendReply, setApiKey, updateSettings,
   applyTheme, setTheme, completeOnboarding, setAccountField, setProfile,
   setProfileSummarySilent, toggleTrait, setTraitText, removeTrait, addTrait,
   confirmProfile, addMuse, removeMuse, collectMuse, MAX_MUSES, setAccountHandle,
   collectOwnPosts, accountLog, logEdit, setLearnedTraits, clearLearnedTraits, setMuseContext,
 } from "./store.js";
-import { generatePosts, remixPost, testConnection, previewPost, generateProfile, learnPreferences, getProviders, providerOf } from "./ai.js";
+import { generatePosts, remixPost, draftReply, testConnection, previewPost, generateProfile, learnPreferences, getProviders, providerOf } from "./ai.js";
 import { fmtTime, fmtRelative, linkify } from "./util.js";
 import * as ic from "./icons.js";
 
@@ -31,6 +31,9 @@ const uiState = {
   genOptionsOpen: false,
   contextTab: "voice",
   productFetching: false,
+  replyCandidates: [],
+  replyScanning: false,
+  replyBusyId: null,
 };
 
 /* Only one profile scrape at a time — parallel background-tab scrapes are the
@@ -173,6 +176,7 @@ function renderTopbar(state) {
     <div class="top-row">
       <nav class="tabs">
         ${tab("feed", "Feed")}
+        ${tab("replies", "Replies")}
         ${tab("queue", queued > 0 ? `Queue<span class="tab-count">${queued}</span>` : "Queue")}
         ${tab("context", "Context")}
         ${tab("settings", "Settings")}
@@ -190,6 +194,7 @@ function subtitleFor(state, acc) {
     const n = accountPosts(acc && acc.id).filter((p) => p.status === "draft").length;
     return n ? n + " draft" + (n === 1 ? "" : "s") + " ready" : "Generated posts land here";
   }
+  if (state.view === "replies") return uiState.replyCandidates.length ? uiState.replyCandidates.length + " visible post" + (uiState.replyCandidates.length === 1 ? "" : "s") + " queued for review" : "Scan visible X posts to draft replies";
   if (state.view === "queue") {
     const n = state.posts.filter((p) => p.status === "queued").length;
     return n ? n + " scheduled" + (n === 1 ? "" : "s") : "Scheduled posts fire automatically";
@@ -239,6 +244,7 @@ function renderContent(state) {
   let html;
   switch (state.view) {
     case "feed": html = viewFeed(state, acc); break;
+    case "replies": html = viewReplies(state, acc); break;
     case "queue": html = viewQueue(state, acc); break;
     case "context": html = viewContext(state, acc); break;
     case "settings": html = viewSettings(state); break;
@@ -373,6 +379,36 @@ function skeletonTweet() {
       <div class="sk-line w95"></div>
       <div class="sk-line w80"></div>
       <div class="sk-line w55"></div>
+    </div>
+  </article>`;
+}
+
+/* ---------------------------- REPLIES ---------------------------- */
+
+function viewReplies(state, acc) {
+  const scanning = uiState.replyScanning;
+  const candidates = uiState.replyCandidates;
+  const scan = `<div class="panel-head reply-toolbar">
+    <div><h2><span class="sec-ico">${ic.remix(18)}</span>Reply lab</h2><p class="muted">Scan posts currently visible in the active X tab, then choose what deserves a reply.</p></div>
+    <button class="btn-primary" data-action="scan-replies" ${scanning ? "disabled" : "">${ic.remix(18)}<span>${scanning ? "Scanning…" : "Scan visible posts"}</span></button>
+  </div>`;
+  const body = !candidates.length
+    ? emptyState(ic.remix(26), "No posts scanned", "Open X, scroll to posts you genuinely want to engage with, then scan them here.", [])
+    : `<div class="reply-list">${candidates.map((candidate) => replyCard(candidate, acc)).join("")}</div>`;
+  return `<div class="wrap narrow"><section class="panel">${scan}</section>${body}</div>`;
+}
+
+function replyCard(candidate, acc) {
+  const busy = uiState.replyBusyId === candidate.id;
+  const draft = candidate.draft || "";
+  return `<article class="reply-card" data-id="${escapeAttr(candidate.id)}">
+    <div class="reply-source"><span>@${escapeText(candidate.author)}</span><a href="${escapeAttr(candidate.url)}" target="_blank" rel="noreferrer">Open post</a></div>
+    <div class="reply-post">${linkify(candidate.text)}</div>
+    <textarea class="voice-area sm" data-role="reply-draft" data-id="${escapeAttr(candidate.id)}" placeholder="Draft a reply, or write one yourself…">${escapeText(draft)}</textarea>
+    <div class="reply-actions">
+      <button class="btn-ghost sm" data-action="draft-reply" data-id="${escapeAttr(candidate.id)}" ${busy ? "disabled" : ""}>${ic.spark(16)}<span>${busy ? "Working…" : draft ? "Remix" : "Draft"}</span></button>
+      <button class="btn-primary sm" data-action="send-reply" data-id="${escapeAttr(candidate.id)}" ${busy || !draft.trim() ? "disabled" : ""}>${ic.send(16)}<span>Send reply</span></button>
+      <button class="btn-ghost sm" data-action="skip-reply" data-id="${escapeAttr(candidate.id)}">${ic.close(16)}<span>Skip</span></button>
     </div>
   </article>`;
 }
@@ -856,6 +892,10 @@ function onGlobalClick(e) {
     case "goto-voice": uiState.contextTab = "voice"; setView("context"); break;
     case "context-tab": uiState.contextTab = t.dataset.contextTab === "product" ? "product" : "voice"; render(getState()); break;
     case "generate": doGenerate(); break;
+    case "scan-replies": doScanReplies(); break;
+    case "draft-reply": doDraftReply(id); break;
+    case "send-reply": doSendReply(id); break;
+    case "skip-reply": removeReplyCandidate(id); break;
     case "count-inc": updateSettings({ generateCount: Math.min(10, (getState().settings.generateCount || 5) + 1) }); break;
     case "count-dec": updateSettings({ generateCount: Math.max(1, (getState().settings.generateCount || 5) - 1) }); break;
     case "toggle-gen-options": uiState.genOptionsOpen = !uiState.genOptionsOpen; render(getState()); break;
@@ -920,6 +960,10 @@ function onGlobalInput(e) {
   if (acc && t.dataset.role === "muse-context") {
     setMuseContext(acc.id, t.dataset.handle, t.value);
     flashSaved();
+  }
+  if (t.dataset.role === "reply-draft") {
+    const candidate = uiState.replyCandidates.find((item) => item.id === t.dataset.id);
+    if (candidate) candidate.draft = t.value;
   }
   if (acc && t.id === "profileSummary") {
     setProfileSummarySilent(acc.id, t.value);
@@ -1012,6 +1056,68 @@ async function doGenerate() {
     uiState.generating = false;
     render(getState());
   }
+}
+
+async function doScanReplies() {
+  if (uiState.replyScanning) return;
+  uiState.replyScanning = true;
+  render(getState());
+  try {
+    const res = await scanReplyCandidates();
+    if (!res || !res.ok) throw new Error((res && res.error) || "Could not scan the active X tab");
+    uiState.replyCandidates = (res.items || []).map((item) => ({ ...item, draft: "" }));
+    if (!uiState.replyCandidates.length) toast("No reply candidates found - scroll X to posts with text and try again", "warn");
+    else toast("Found " + uiState.replyCandidates.length + " posts to review", "ok");
+  } catch (e) {
+    toast((e && e.message) || "Could not scan visible posts", "error");
+  } finally {
+    uiState.replyScanning = false;
+    render(getState());
+  }
+}
+
+async function doDraftReply(id) {
+  const candidate = uiState.replyCandidates.find((item) => item.id === id);
+  const state = getState();
+  const acc = getActiveAccount();
+  if (!candidate || !acc) return;
+  if (!state.apiKey) { toast("Add your API key in Settings first", "warn"); setView("settings"); return; }
+  uiState.replyBusyId = id;
+  render(state);
+  try {
+    const draft = await draftReply({ candidate, account: acc, settings: state.settings, apiKey: state.apiKey });
+    if (!draft) throw new Error("Reply draft came back empty");
+    candidate.draft = draft;
+  } catch (e) {
+    toast((e && e.message) || "Could not draft a reply", "error");
+  } finally {
+    uiState.replyBusyId = null;
+    render(getState());
+  }
+}
+
+async function doSendReply(id) {
+  const candidate = uiState.replyCandidates.find((item) => item.id === id);
+  const acc = getActiveAccount();
+  if (!candidate || !acc || !candidate.draft.trim()) return;
+  uiState.replyBusyId = id;
+  render(getState());
+  try {
+    const res = await sendReply(candidate.draft, candidate.url, acc.id);
+    if (!res || !res.ok) throw new Error((res && res.error) || "Reply failed");
+    removeReplyCandidate(id, false);
+    toast("Reply sent", "ok");
+  } catch (e) {
+    toast((e && e.message) || "Could not send reply", "error");
+  } finally {
+    uiState.replyBusyId = null;
+    render(getState());
+  }
+}
+
+function removeReplyCandidate(id, rerender = true) {
+  uiState.replyCandidates = uiState.replyCandidates.filter((item) => item.id !== id);
+  if (rerender) render(getState());
 }
 
 async function doPostNow(id) {

@@ -484,6 +484,16 @@ export async function scrapeVisibleInto(accountId) {
   return { ok: true, text: res.text };
 }
 
+export async function scanReplyCandidates() {
+  const res = await chrome.runtime.sendMessage({ type: "RUN_IN_X", payload: { type: "SCRAPE_REPLY_CANDIDATES" } }).catch(() => null);
+  return res || { ok: false, error: "no_response" };
+}
+
+export async function sendReply(text, url, accountId) {
+  const res = await chrome.runtime.sendMessage({ type: "POST_REPLY", text, url, accountId }).catch(() => null);
+  return res || { ok: false, error: "no_response" };
+}
+
 /* ---------- settings ---------- */
 
 export function setApiKey(key) {

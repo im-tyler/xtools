@@ -14,6 +14,10 @@
           sendResponse(await postTweet(msg.text, msg.expected));
         } else if (msg && msg.type === "SCRAPE_VISIBLE") {
           sendResponse({ ok: true, text: scrapeVisibleTweets() });
+        } else if (msg && msg.type === "SCRAPE_REPLY_CANDIDATES") {
+          sendResponse({ ok: true, items: scrapeReplyCandidates() });
+        } else if (msg && msg.type === "POST_REPLY") {
+          sendResponse(await postReply(msg.text, msg.url, msg.expected));
         } else if (msg && msg.type === "SCRAPE_PROFILE") {
           sendResponse(await scrapeProfile(msg.handle, msg.limit || 30));
         } else if (msg && msg.type === "PROFILE_META") {
@@ -49,6 +53,24 @@
         setTimeout(tick, interval);
       })();
     });
+  }
+
+  function insertText(textarea, text) {
+    textarea.focus();
+    let inserted = false;
+    try { inserted = document.execCommand("insertText", false, text); } catch (e) {}
+    if (!inserted || !textarea.textContent.trim()) {
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(textarea);
+      range.collapse(false);
+      if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+      try { inserted = document.execCommand("insertText", false, text); } catch (e) {}
+      if (!inserted || !textarea.textContent.trim()) {
+        textarea.textContent = text;
+        textarea.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
+      }
+    }
   }
 
   /* ---------- session identity ---------- */
@@ -95,26 +117,8 @@
       button = await waitFor(() => q('[data-testid="tweetButton"]'), { timeout: 6000 });
     }
 
-    textarea.focus();
     await sleep(60);
-
-    // execCommand dispatches a trusted input event the editor accepts.
-    let inserted = false;
-    try { inserted = document.execCommand("insertText", false, text); } catch (e) {}
-
-    if (!inserted || textarea.textContent.trim() === "") {
-      textarea.focus();
-      const sel = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(textarea);
-      range.collapse(false);
-      if (sel) { sel.removeAllRanges(); sel.addRange(range); }
-      try { inserted = document.execCommand("insertText", false, text); } catch (e) {}
-      if (!inserted || textarea.textContent.trim() === "") {
-        textarea.textContent = text;
-        textarea.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
-      }
-    }
+    insertText(textarea, text);
 
     // Wait for the post button to enable.
     const ready = await waitFor(() => {
@@ -157,6 +161,65 @@
       if (t && !seen.has(t)) { seen.add(t); out.push(t); }
     });
     return out.join("\n\n");
+  }
+
+  function scrapeReplyCandidates() {
+    const own = loggedInHandle();
+    const seen = new Set();
+    const items = [];
+    document.querySelectorAll('article[data-testid="tweet"]').forEach((article) => {
+      if (items.length >= 12 || article.querySelector('[data-testid="socialContext"]')) return;
+      const textEl = article.querySelector('[data-testid="tweetText"]');
+      const text = textEl ? (textEl.textContent || "").trim().slice(0, 1200) : "";
+      const author = authorOf(article);
+      const link = Array.from(article.querySelectorAll('a[href*="/status/"]')).find((a) => /\/status\/\d+/.test(a.getAttribute("href") || ""));
+      if (!text || !author || author === own || !link) return;
+      const url = new URL(link.getAttribute("href"), location.origin).href;
+      if (seen.has(url)) return;
+      seen.add(url);
+      items.push({ id: url, url, author, text });
+    });
+    return items;
+  }
+
+  async function postReply(text, url, expected) {
+    if (!text || !text.trim()) return { ok: false, error: "empty_text" };
+    if (expected) {
+      const want = String(expected).replace(/^@/, "").toLowerCase();
+      const cur = loggedInHandle();
+      if (!cur) return { ok: false, error: "account_unverified" };
+      if (cur !== want) return { ok: false, error: "wrong_account: logged in as @" + cur };
+    }
+    let path;
+    try { path = new URL(url, location.origin).pathname; } catch (e) { return { ok: false, error: "invalid_target" }; }
+    const article = Array.from(document.querySelectorAll('article[data-testid="tweet"]')).find((tweet) =>
+      Array.from(tweet.querySelectorAll('a[href*="/status/"]')).some((a) => new URL(a.getAttribute("href"), location.origin).pathname === path)
+    );
+    if (!article) return { ok: false, error: "target_not_visible: scroll the post back into view" };
+    const reply = article.querySelector('[data-testid="reply"]');
+    if (!reply) return { ok: false, error: "reply_button_not_found" };
+    const dialogs = Array.from(document.querySelectorAll('[role="dialog"]'));
+    reply.click();
+    const textarea = await waitFor(() => {
+      const fresh = Array.from(document.querySelectorAll('[role="dialog"]')).filter((dialog) => !dialogs.includes(dialog));
+      for (const dialog of fresh.reverse()) {
+        const field = dialog.querySelector('[data-testid="tweetTextarea_0"]');
+        if (field && isVisible(field)) return field;
+      }
+      return null;
+    }, { timeout: 8000, interval: 100 });
+    if (!textarea) return { ok: false, error: "reply_composer_not_found" };
+    await sleep(80);
+    insertText(textarea, text.trim());
+    const submit = await waitFor(() => {
+      const dialog = textarea.closest('[role="dialog"]') || document;
+      return Array.from(dialog.querySelectorAll('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]')).find((button) =>
+        isVisible(button) && button.getAttribute("disabled") === null && button.getAttribute("aria-disabled") !== "true"
+      );
+    }, { timeout: 7000, interval: 100 });
+    if (!submit) return { ok: false, error: "reply_submit_not_ready" };
+    submit.click();
+    return { ok: true };
   }
 
   /* Scroll a profile timeline (or /with_replies) and collect tweets authored by
