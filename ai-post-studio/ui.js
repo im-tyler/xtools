@@ -5,7 +5,7 @@ import {
   applyTheme, setTheme, completeOnboarding, setAccountField, setProfile,
   setProfileSummarySilent, toggleTrait, setTraitText, removeTrait, addTrait,
   confirmProfile, addMuse, removeMuse, collectMuse, MAX_MUSES, setAccountHandle,
-  collectOwnPosts, accountLog, logEdit, setLearnedTraits, clearLearnedTraits, setMuseContext,
+  collectOwnPosts, accountLog, logEdit, setLearnedTraits, clearLearnedTraits, setMuseContext, fetchMuseAvatar,
 } from "./store.js";
 import { generatePosts, remixPost, draftReply, testConnection, previewPost, generateProfile, learnPreferences, getProviders, providerOf } from "./ai.js";
 import { fmtTime, fmtRelative, linkify } from "./util.js";
@@ -213,6 +213,13 @@ function avatarHtml(acc, cls) {
   return `<span class="avatar ${cls || ""}">${inner}</span>`;
 }
 
+function museAvatarHtml(muse) {
+  const inner = muse && muse.avatarUrl
+    ? `<img src="${escapeAttr(muse.avatarUrl)}" alt="">`
+    : ((muse && muse.handle) || "A").trim().charAt(0).toUpperCase();
+  return `<span class="avatar sm">${inner}</span>`;
+}
+
 function accountSwitcher(state, acc) {
   return `
   <div class="acct ${uiState.menuOpen ? "open" : ""}">
@@ -410,9 +417,9 @@ function replyCard(candidate, acc, state) {
   const vision = state.settings.provider === "openai" && /^(gpt-4o|gpt-4\.1)/.test(state.settings.model || "");
   const mediaDetails = images.map((image) => "Image: " + (image.alt || "no alt text")).concat(videos.map((video) => "Video: " + (video.description || "no accessible metadata"))).join("\n");
   return `<article class="tweet reply-draft" data-id="${escapeAttr(candidate.id)}">
-    <div class="tweet-avatar"><span class="reply-author-avatar">${escapeText(candidate.author.charAt(0).toUpperCase())}</span></div>
+    <div class="tweet-avatar"><span class="reply-author-avatar">${candidate.avatar ? `<img src="${escapeAttr(candidate.avatar)}" alt="">` : escapeText(candidate.author.charAt(0).toUpperCase())}</span></div>
     <div class="tweet-main">
-      <div class="tweet-head"><span class="t-name">@${escapeText(candidate.author)}</span><span class="t-spacer"></span><a class="reply-open" href="${escapeAttr(candidate.url)}" target="_blank" rel="noreferrer">Open post</a></div>
+      <div class="tweet-head"><a class="t-name" href="https://x.com/${escapeAttr(candidate.author)}" target="_blank" rel="noreferrer">@${escapeText(candidate.author)}</a><span class="t-spacer"></span><a class="reply-open" href="${escapeAttr(candidate.url)}" target="_blank" rel="noreferrer">Open post</a></div>
       <div class="tweet-body">${linkify(candidate.text)}</div>
       ${hasMedia ? `<details class="reply-media"><summary>${images.length ? images.length + " image" + (images.length === 1 ? "" : "s") : ""}${images.length && videos.length ? " + " : ""}${videos.length ? videos.length + " video" + (videos.length === 1 ? "" : "s") : ""} attached - ${vision && images.length ? "vision included" : "review media"}</summary><div>${escapeText(mediaDetails || "Open the post to review attached media.").replace(/\n/g, "<br>")}</div></details>` : ""}
       <textarea class="tweet-edit reply-draft-input" rows="3" data-role="reply-draft" data-id="${escapeAttr(candidate.id)}" placeholder="Draft a reply, or write one yourself…">${escapeText(draft)}</textarea>
@@ -608,7 +615,7 @@ function musesHtml(acc) {
     const snapshot = museSnapshot(m);
     return `<div class="muse ${busy ? "busy" : ""}">
       <div class="muse-head">
-        <span class="muse-handle">@${escapeText(m.handle)}</span>
+        ${museAvatarHtml(m)}<a class="muse-handle" href="https://x.com/${escapeAttr(m.handle)}" target="_blank" rel="noreferrer">@${escapeText(m.handle)}</a>
         <span class="muse-meta">${escapeText(meta)}</span>
         <button class="btn-icon" data-action="collect-muse" data-handle="${escapeAttr(m.handle)}" title="${m.fetchedAt ? "Refresh" : "Collect"} posts & replies" ${scrapeBusy() ? "disabled" : ""}>${busy ? ic.clock(16) : ic.remix(16)}</button>
         <button class="btn-icon danger" data-action="remove-muse" data-handle="${escapeAttr(m.handle)}" title="Remove" ${busy ? "disabled" : ""}>${ic.trash(16)}</button>
@@ -1324,6 +1331,7 @@ async function doCollectMuse(handle) {
     else if (res && res.ok) toast("Nothing collected from @" + handle + " — check the handle and that you're logged into x.com", "warn");
     else toast("Collect failed: " + ((res && res.error) || "unknown"), "error");
   } finally {
+    fetchMuseAvatar(acc.id, handle).catch(() => {});
     uiState.collectingMuse = null;
     render(getState());
   }

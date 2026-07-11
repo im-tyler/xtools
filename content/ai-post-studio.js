@@ -188,7 +188,8 @@
         poster: video.getAttribute("poster") || "",
         description: video.getAttribute("aria-label") || "",
       })).filter((video, index, all) => (video.poster || video.description) && all.findIndex((other) => other.poster === video.poster && other.description === video.description) === index).slice(0, 2);
-      items.push({ id: url, url, author, text, images, videos });
+      const avatar = article.querySelector('[data-testid^="UserAvatar-Container-"] img');
+      items.push({ id: url, url, author, text, images, videos, avatar: avatar && avatar.getAttribute("src") || "" });
     });
     return items;
   }

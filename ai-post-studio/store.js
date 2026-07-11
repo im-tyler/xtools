@@ -252,6 +252,18 @@ export function setMuseContext(accountId, handle, context) {
   persist();
 }
 
+export async function fetchMuseAvatar(accountId, handle) {
+  const res = await chrome.runtime.sendMessage({ type: "FETCH_AVATAR", handle }).catch(() => null);
+  if (!res || !res.ok || !res.avatar) return res || { ok: false, error: "no_response" };
+  const a = findAccount(accountId);
+  const muse = a && (a.muses || []).find((m) => m.handle.toLowerCase() === String(handle).toLowerCase());
+  if (!muse) return { ok: false, error: "not_found" };
+  muse.avatarUrl = res.avatar;
+  persist();
+  notify();
+  return { ok: true, avatar: res.avatar };
+}
+
 /* Scrape the account's own linked @handle (tweets + replies) into the "Your
  * posts" voice examples, deduped against what's already there. */
 export async function collectOwnPosts(accountId) {
