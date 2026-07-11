@@ -416,11 +416,13 @@ function replyCard(candidate, acc, state) {
   const hasMedia = images.length || videos.length;
   const vision = state.settings.provider === "openai" && /^(gpt-4o|gpt-4\.1)/.test(state.settings.model || "");
   const mediaDetails = images.map((image) => "Image: " + (image.alt || "no alt text")).concat(videos.map((video) => "Video: " + (video.description || "no accessible metadata"))).join("\n");
+  const previews = images.map((image) => `<a href="${escapeAttr(candidate.url)}" target="_blank" rel="noreferrer"><img src="${escapeAttr(image.url)}" alt="${escapeAttr(image.alt || "Attached image")}"></a>`).concat(videos.filter((video) => video.poster).map((video) => `<a class="reply-video-preview" href="${escapeAttr(candidate.url)}" target="_blank" rel="noreferrer"><img src="${escapeAttr(video.poster)}" alt="${escapeAttr(video.description || "Attached video")}"><span>Video</span></a>`)).join("");
   return `<article class="tweet reply-draft" data-id="${escapeAttr(candidate.id)}">
     <div class="tweet-avatar"><span class="reply-author-avatar">${candidate.avatar ? `<img src="${escapeAttr(candidate.avatar)}" alt="">` : escapeText(candidate.author.charAt(0).toUpperCase())}</span></div>
     <div class="tweet-main">
       <div class="tweet-head"><a class="t-name" href="https://x.com/${escapeAttr(candidate.author)}" target="_blank" rel="noreferrer">@${escapeText(candidate.author)}</a><span class="t-spacer"></span><a class="reply-open" href="${escapeAttr(candidate.url)}" target="_blank" rel="noreferrer">Open post</a></div>
       <div class="tweet-body">${linkify(candidate.text)}</div>
+      ${previews ? `<div class="reply-media-preview">${previews}</div>` : ""}
       ${hasMedia ? `<details class="reply-media"><summary>${images.length ? images.length + " image" + (images.length === 1 ? "" : "s") : ""}${images.length && videos.length ? " + " : ""}${videos.length ? videos.length + " video" + (videos.length === 1 ? "" : "s") : ""} attached - ${vision && images.length ? "vision included" : "review media"}</summary><div>${escapeText(mediaDetails || "Open the post to review attached media.").replace(/\n/g, "<br>")}</div></details>` : ""}
       <textarea class="tweet-edit reply-draft-input" rows="3" data-role="reply-draft" data-id="${escapeAttr(candidate.id)}" placeholder="Draft a reply, or write one yourself…">${escapeText(draft)}</textarea>
       <div class="tweet-actions">

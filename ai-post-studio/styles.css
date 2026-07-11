@@ -539,6 +539,10 @@ select.input { cursor: pointer; appearance: none; background-image: linear-gradi
 .reply-author-avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--surface-3); color: var(--text-dim); font-size: 13px; font-weight: 700; }
 .reply-author-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
 .reply-open { font-size: 11px; font-weight: 600; }
+.reply-media-preview { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 7px; margin-top: 10px; overflow: hidden; border-radius: var(--radius-sm); }
+.reply-media-preview a { position: relative; display: block; min-height: 100px; overflow: hidden; border-radius: var(--radius-sm); background: var(--surface-2); }
+.reply-media-preview img { display: block; width: 100%; height: 150px; object-fit: cover; }
+.reply-video-preview span { position: absolute; left: 7px; bottom: 7px; padding: 3px 6px; border-radius: 999px; background: rgba(0,0,0,.72); color: #fff; font-size: 10px; font-weight: 700; }
 .reply-media { margin-top: 10px; padding: 7px 9px; border-left: 2px solid var(--warn); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: var(--surface-2); color: var(--text-faint); font-size: 11px; line-height: 1.45; }
 .reply-media summary { cursor: pointer; color: var(--text-dim); font-weight: 650; }
 .reply-media[open] summary { margin-bottom: 6px; }
