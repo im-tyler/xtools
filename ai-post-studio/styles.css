@@ -532,10 +532,15 @@ select.input { cursor: pointer; appearance: none; background-image: linear-gradi
 .reply-toolbar { align-items: center; }
 .reply-toolbar .muted { margin-bottom: 0; }
 .reply-toolbar-actions { display: flex; align-items: center; gap: 8px; }
+.reply-scan-limit { display: flex; align-items: center; gap: 4px; color: var(--text-faint); font-size: 11px; font-weight: 650; }
+.reply-scan-limit .input { width: 52px; padding: 6px 4px; font-size: 11px; }
 .reply-list { display: flex; flex-direction: column; gap: 12px; }
 .reply-draft { border-left: 2px solid var(--accent); }
 .reply-author-avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--surface-3); color: var(--text-dim); font-size: 13px; font-weight: 700; }
 .reply-open { font-size: 11px; font-weight: 600; }
+.reply-media { margin-top: 10px; padding: 7px 9px; border-left: 2px solid var(--warn); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: var(--surface-2); color: var(--text-faint); font-size: 11px; line-height: 1.45; }
+.reply-media summary { cursor: pointer; color: var(--text-dim); font-weight: 650; }
+.reply-media[open] summary { margin-bottom: 6px; }
 .reply-draft-input { margin-top: 12px; background: var(--surface-2); border-color: var(--border); }
 
 .learned-list { margin: 0 0 10px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }

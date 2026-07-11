@@ -96,6 +96,9 @@ export async function draftReply({ candidate, account, settings, apiKey, signal 
   const examples = sampleExamples(voiceExamplesFrom(account), 8000);
   const voiceGuide = voiceGuideFrom(account);
   const productContext = productContextFrom(account);
+  const images = (candidate.images || []).filter((image) => image && image.url).slice(0, 4);
+  const videos = (candidate.videos || []).filter(Boolean);
+  const vision = settings.provider === "openai" && /^(gpt-4o|gpt-4\.1)/.test(settings.model || "");
   const parts = [
     "Write one concise, substantive reply to this original X post in the author's voice.",
     "First infer the post's central claim, then contribute one of: a precise extension, a useful caveat, a concrete implication, or a thoughtful question.",
@@ -108,11 +111,18 @@ export async function draftReply({ candidate, account, settings, apiKey, signal 
   if (voiceGuide) parts.push("\nVOICE GUIDE:\n" + voiceGuide);
   if (examples) parts.push("\nVOICE EXAMPLES (style only):\n" + examples);
   if (productContext) parts.push("\nPRODUCT FACTS (use only when they make the reply materially more useful; never mention, pitch, or promote the product otherwise):\n" + trimChunks(productContext, 1800));
+  if (!vision && (images.length || videos.length)) {
+    const metadata = images.map((image) => "Image alt text: " + (image.alt || "(none)")).concat(videos.map((video) => "Video metadata: " + (video.description || "(none)"))).join("\n");
+    parts.push("\nMEDIA IS ATTACHED TO THE POST, BUT YOU CANNOT SEE IT. Use only this metadata and do not imply visual understanding:\n" + metadata);
+  }
+  const userContent = vision && images.length
+    ? [{ type: "text", text: parts.join("\n") }].concat(images.map((image) => ({ type: "image_url", image_url: { url: image.url } })))
+    : parts.join("\n");
   const data = await call({
     apiKey, settings, temperature: 0.8, signal,
     messages: [
       { role: "system", content: "You write authentic, concise X replies that add value to the conversation. You do not flatter, spam, pitch, or impersonate." },
-      { role: "user", content: parts.join("\n") },
+      { role: "user", content: userContent },
     ],
   });
   return clean((data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "");

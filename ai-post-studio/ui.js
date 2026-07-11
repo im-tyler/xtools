@@ -35,6 +35,7 @@ const uiState = {
   replyScanning: false,
   replyGenerating: false,
   replyBusyId: null,
+  replyScanLimit: 8,
 };
 
 /* Only one profile scrape at a time — parallel background-tab scrapes are the
@@ -392,22 +393,28 @@ function viewReplies(state, acc) {
   const candidates = uiState.replyCandidates;
   const scan = `<div class="panel-head reply-toolbar">
     <div><h2><span class="sec-ico">${ic.remix(18)}</span>Reply lab</h2><p class="muted">Scan original posts visible in X, then draft replies you can edit, send, or skip.</p></div>
-    <div class="reply-toolbar-actions"><button class="btn-ghost" data-action="scan-replies" ${scanning || generating ? "disabled" : ""}>${ic.remix(16)}<span>${scanning ? "Scanning…" : "Scan"}</span></button><button class="btn-primary" data-action="generate-replies" ${!candidates.length || scanning || generating ? "disabled" : ""}>${ic.spark(16)}<span>${generating ? "Generating…" : "Generate replies"}</span></button></div>
+    <div class="reply-toolbar-actions"><label class="reply-scan-limit"><span>Scan</span><select class="input" data-role="reply-scan-limit" ${scanning || generating ? "disabled" : ""}><option value="4" ${uiState.replyScanLimit === 4 ? "selected" : ""}>4</option><option value="8" ${uiState.replyScanLimit === 8 ? "selected" : ""}>8</option><option value="12" ${uiState.replyScanLimit === 12 ? "selected" : ""}>12</option></select></label><button class="btn-ghost" data-action="scan-replies" ${scanning || generating ? "disabled" : ""}>${ic.remix(16)}<span>${scanning ? "Scanning…" : "Scan"}</span></button><button class="btn-primary" data-action="generate-replies" ${!candidates.length || scanning || generating ? "disabled" : ""}>${ic.spark(16)}<span>${generating ? "Generating…" : "Generate replies"}</span></button></div>
   </div>`;
   const body = !candidates.length
     ? emptyState(ic.remix(26), "No posts scanned", "Open X, scroll to posts you genuinely want to engage with, then scan them here.", [])
-    : `<div class="reply-list">${candidates.map((candidate) => replyCard(candidate, acc)).join("")}</div>`;
+    : `<div class="reply-list">${candidates.map((candidate) => replyCard(candidate, acc, state)).join("")}</div>`;
   return `<div class="wrap narrow"><section class="panel">${scan}</section>${body}</div>`;
 }
 
-function replyCard(candidate, acc) {
+function replyCard(candidate, acc, state) {
   const busy = uiState.replyBusyId === candidate.id || uiState.replyGenerating;
   const draft = candidate.draft || "";
+  const images = candidate.images || [];
+  const videos = candidate.videos || [];
+  const hasMedia = images.length || videos.length;
+  const vision = state.settings.provider === "openai" && /^(gpt-4o|gpt-4\.1)/.test(state.settings.model || "");
+  const mediaDetails = images.map((image) => "Image: " + (image.alt || "no alt text")).concat(videos.map((video) => "Video: " + (video.description || "no accessible metadata"))).join("\n");
   return `<article class="tweet reply-draft" data-id="${escapeAttr(candidate.id)}">
     <div class="tweet-avatar"><span class="reply-author-avatar">${escapeText(candidate.author.charAt(0).toUpperCase())}</span></div>
     <div class="tweet-main">
       <div class="tweet-head"><span class="t-name">@${escapeText(candidate.author)}</span><span class="t-spacer"></span><a class="reply-open" href="${escapeAttr(candidate.url)}" target="_blank" rel="noreferrer">Open post</a></div>
       <div class="tweet-body">${linkify(candidate.text)}</div>
+      ${hasMedia ? `<details class="reply-media"><summary>${images.length ? images.length + " image" + (images.length === 1 ? "" : "s") : ""}${images.length && videos.length ? " + " : ""}${videos.length ? videos.length + " video" + (videos.length === 1 ? "" : "s") : ""} attached - ${vision && images.length ? "vision included" : "review media"}</summary><div>${escapeText(mediaDetails || "Open the post to review attached media.").replace(/\n/g, "<br>")}</div></details>` : ""}
       <textarea class="tweet-edit reply-draft-input" rows="3" data-role="reply-draft" data-id="${escapeAttr(candidate.id)}" placeholder="Draft a reply, or write one yourself…">${escapeText(draft)}</textarea>
       <div class="tweet-actions">
         <button class="xact x-remix" data-action="draft-reply" data-id="${escapeAttr(candidate.id)}" ${busy ? "disabled" : ""}>${ic.spark(16)}<span>${busy ? "Working…" : draft ? "Remix" : "Draft"}</span></button>
@@ -989,6 +996,10 @@ function onGlobalInput(e) {
 
 function onGlobalChange(e) {
   const t = e.target;
+  if (t.dataset.role === "reply-scan-limit") {
+    uiState.replyScanLimit = [4, 8, 12].includes(+t.value) ? +t.value : 8;
+    return;
+  }
   if (t.dataset.role === "setting") {
     const key = t.dataset.key;
     let val = t.type === "checkbox" ? t.checked : t.value;
@@ -1069,7 +1080,7 @@ async function doScanReplies() {
   uiState.replyScanning = true;
   render(getState());
   try {
-    const res = await scanReplyCandidates();
+    const res = await scanReplyCandidates(uiState.replyScanLimit);
     if (!res || !res.ok) throw new Error((res && res.error) || "Could not scan the active X tab");
     uiState.replyCandidates = (res.items || []).map((item) => ({ ...item, draft: "" }));
     if (!uiState.replyCandidates.length) toast("No reply candidates found - scroll X to posts with text and try again", "warn");

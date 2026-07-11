@@ -15,7 +15,7 @@
         } else if (msg && msg.type === "SCRAPE_VISIBLE") {
           sendResponse({ ok: true, text: scrapeVisibleTweets() });
         } else if (msg && msg.type === "SCRAPE_REPLY_CANDIDATES") {
-          sendResponse({ ok: true, items: scrapeReplyCandidates() });
+          sendResponse({ ok: true, items: scrapeReplyCandidates(msg.limit) });
         } else if (msg && msg.type === "POST_REPLY") {
           sendResponse(await postReply(msg.text, msg.url, msg.expected));
         } else if (msg && msg.type === "SCRAPE_PROFILE") {
@@ -163,12 +163,13 @@
     return out.join("\n\n");
   }
 
-  function scrapeReplyCandidates() {
+  function scrapeReplyCandidates(limit) {
     const own = loggedInHandle();
     const seen = new Set();
     const items = [];
+    const max = Math.min(12, Math.max(1, Number(limit) || 8));
     document.querySelectorAll('article[data-testid="tweet"]').forEach((article) => {
-      if (items.length >= 8 || article.querySelector('[data-testid="socialContext"]')) return;
+      if (items.length >= max || article.querySelector('[data-testid="socialContext"]')) return;
       const header = (article.innerText || "").split("\n").slice(0, 6).join(" ");
       if (/\bReplying to\s+@/i.test(header)) return;
       const textEl = article.querySelector('[data-testid="tweetText"]');
@@ -179,7 +180,15 @@
       const url = new URL(link.getAttribute("href"), location.origin).href;
       if (seen.has(url)) return;
       seen.add(url);
-      items.push({ id: url, url, author, text });
+      const images = Array.from(article.querySelectorAll('img[src*="pbs.twimg.com/media"]')).map((img) => ({
+        url: img.getAttribute("src") || "",
+        alt: img.getAttribute("alt") || "",
+      })).filter((image, index, all) => image.url && all.findIndex((other) => other.url === image.url) === index).slice(0, 4);
+      const videos = Array.from(article.querySelectorAll('video')).map((video) => ({
+        poster: video.getAttribute("poster") || "",
+        description: video.getAttribute("aria-label") || "",
+      })).filter((video, index, all) => (video.poster || video.description) && all.findIndex((other) => other.poster === video.poster && other.description === video.description) === index).slice(0, 2);
+      items.push({ id: url, url, author, text, images, videos });
     });
     return items;
   }

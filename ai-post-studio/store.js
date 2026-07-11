@@ -484,8 +484,8 @@ export async function scrapeVisibleInto(accountId) {
   return { ok: true, text: res.text };
 }
 
-export async function scanReplyCandidates() {
-  const res = await chrome.runtime.sendMessage({ type: "RUN_IN_X", payload: { type: "SCRAPE_REPLY_CANDIDATES" } }).catch(() => null);
+export async function scanReplyCandidates(limit) {
+  const res = await chrome.runtime.sendMessage({ type: "RUN_IN_X", payload: { type: "SCRAPE_REPLY_CANDIDATES", limit } }).catch(() => null);
   return res || { ok: false, error: "no_response" };
 }
 
