@@ -390,7 +390,7 @@ function viewReplies(state, acc) {
   const candidates = uiState.replyCandidates;
   const scan = `<div class="panel-head reply-toolbar">
     <div><h2><span class="sec-ico">${ic.remix(18)}</span>Reply lab</h2><p class="muted">Scan posts currently visible in the active X tab, then choose what deserves a reply.</p></div>
-    <button class="btn-primary" data-action="scan-replies" ${scanning ? "disabled" : "">${ic.remix(18)}<span>${scanning ? "Scanning…" : "Scan visible posts"}</span></button>
+    <button class="btn-primary" data-action="scan-replies" ${scanning ? "disabled" : ""}>${ic.remix(18)}<span>${scanning ? "Scanning…" : "Scan visible posts"}</span></button>
   </div>`;
   const body = !candidates.length
     ? emptyState(ic.remix(26), "No posts scanned", "Open X, scroll to posts you genuinely want to engage with, then scan them here.", [])
